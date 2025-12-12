@@ -1,0 +1,15 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+.venv
+.env
+
+# Development & Documentation
+tests/
+scripts/
+docs/
+PUBLISH.md
