@@ -124,11 +124,8 @@ korean-law-mcp
 {
   "mcpServers": {
     "korean-law": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "--directory",
-        "/absolute/path/to/korean-law-mcp",
-        "run",
         "korean-law-mcp"
       ],
       "env": {
@@ -137,6 +134,11 @@ korean-law-mcp
     }
   }
 }
+```
+
+또는 `pipx`를 사용하는 경우:
+```bash
+pipx run korean-law-mcp
 ```
 
 또는 직접 Python으로 실행할 경우:
