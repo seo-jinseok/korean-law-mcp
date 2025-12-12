@@ -2,6 +2,10 @@ import os
 import sys
 import subprocess
 import argparse
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 def read_file(path):
     with open(path, 'r', encoding='utf-8') as f:
@@ -73,7 +77,7 @@ def sync_readmes(dry_run=False):
         write_file("README_PyPI.md", content)
         print("Updated README_PyPI.md")
 
-def run_command(cmd, dry_run=False):
+def run_command(cmd, dry_run=False, ignore_errors=False):
     print(f">>> Running: {cmd}")
     if dry_run:
         print("[Dry Run] Command skipped.")
@@ -81,8 +85,11 @@ def run_command(cmd, dry_run=False):
     
     result = subprocess.run(cmd, shell=True)
     if result.returncode != 0:
-        print(f"Error executing command: {cmd}")
-        sys.exit(1)
+        if ignore_errors:
+            print(f"Warning: Command '{cmd}' failed, but continuing.")
+        else:
+            print(f"Error executing command: {cmd}")
+            sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Automate release process")
@@ -97,20 +104,29 @@ def main():
     run_command("git add README.md README_PyPI.md", dry_run=args.dry_run)
     # Check if there are changes to commit
     if not args.dry_run:
-        status = subprocess.getoutput("git status --porcelain")
-        if status:
-            run_command('git commit -m "docs: sync readme and prepare for release"', dry_run=args.dry_run)
-            run_command("git push origin main", dry_run=args.dry_run)
-        else:
-            print("No changes to commit.")
+        # Try to commit, but ignore error if nothing to commit
+        run_command('git commit -m "docs: sync readme and prepare for release"', dry_run=args.dry_run, ignore_errors=True)
+        run_command("git push origin main", dry_run=args.dry_run, ignore_errors=True)
     else:
         print("[Dry Run] git commit and push")
 
     # 3. PyPI Publish
     if not args.skip_pypi:
+        # Check for token
+        # Common variable names: UV_PUBLISH_TOKEN, PYPI_TOKEN, or user typo PYPL_TOKEN
+        token = os.getenv("UV_PUBLISH_TOKEN") or os.getenv("PYPI_TOKEN") or os.getenv("PYPL_TOKEN")
+        
+        if not token:
+             print("Warning: UV_PUBLISH_TOKEN, PYPI_TOKEN, or PYPL_TOKEN not found in environment. You may need to enter credentials manually.")
+             
         # Build
         run_command("uv build", dry_run=args.dry_run)
+        
         # Publish
+        # Force set UV_PUBLISH_TOKEN if we found a fallback
+        if token and not os.getenv("UV_PUBLISH_TOKEN"):
+            os.environ["UV_PUBLISH_TOKEN"] = token
+            
         run_command("uv publish", dry_run=args.dry_run)
 
 if __name__ == "__main__":
