@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import argparse
+import shutil
 from dotenv import load_dotenv
 
 # Load environment variables from .env
@@ -119,6 +120,11 @@ def main():
         if not token:
              print("Warning: UV_PUBLISH_TOKEN, PYPI_TOKEN, or PYPL_TOKEN not found in environment. You may need to enter credentials manually.")
              
+        # Clean dist directory to avoid uploading old versions
+        if os.path.exists("dist"):
+            print(">>> Cleaning dist directory...")
+            shutil.rmtree("dist")
+
         # Build
         run_command("uv build", dry_run=args.dry_run)
         
