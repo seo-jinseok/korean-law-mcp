@@ -84,11 +84,19 @@ docker build -t korean-law-mcp .
 docker run -e OPEN_LAW_ID=your_api_id -i korean-law-mcp
 ```
 
-### 방법 3: PyPI 배포 (예정)
-PyPI에 배포되면 별도의 설치 없이 `uvx`로 바로 실행할 수 있습니다.
+### 방법 3: PyPI 설치 (권장)
+PyPI에 배포된 패키지를 `uvx`로 바로 실행할 수 있습니다.
 
 ```bash
+# 실행
 uvx korean-law-mcp
+```
+
+또는 `pip`로 설치하여 실행할 수도 있습니다.
+
+```bash
+pip install korean-law-mcp
+korean-law-mcp
 ```
 
 ## 📚 제공 도구 (Tools)

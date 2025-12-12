@@ -1,6 +1,6 @@
 [project]
 name = "korean-law-mcp"
-version = "0.1.0"
+version = "0.1.3"
 description = "MCP Server for Korean Law Open API"
 dependencies = [
     "mcp[cli]>=0.1.0",
@@ -12,9 +12,9 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "Seo Jinseok", email = "truestone@gmail.com" }
 ]
-urls = { Repository = "https://github.com/yourusername/korean-law-mcp" }
+urls = { Repository = "https://github.com/seo-jinseok/korean-law-mcp" }
 
 [build-system]
 requires = ["hatchling"]
@@ -32,7 +32,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/korean_law_mcp"]
 
 [project.scripts]
-korean-law-mcp = "src.main:main"
+korean-law-mcp = "korean_law_mcp.main:main"
