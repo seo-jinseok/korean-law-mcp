@@ -107,6 +107,7 @@ korean-law-mcp
 |---|---|---|
 | `search_statute` | 법령(법률, 시행령 등)을 검색합니다. | `query`: 검색어 (예: "건축법") |
 | `get_statute_detail` | 특정 법령의 상세 내용(조문 등)을 조회합니다. | `law_id`: 법령 일련번호 (검색 결과의 ID) |
+| `get_statute_article` | 특정 법령의 특정 조문 내용을 조회합니다. | `law_id`: 법령 ID, `article_no`: 조문번호 (예: "20", "20-2") |
 | `search_precedent` | 판례를 검색합니다. | `query`: 검색어 (예: "사기") |
 | `get_precedent_detail` | 특정 판례의 상세 내용(판시사항, 전문 등)을 조회합니다. | `prec_id`: 판례 일련번호 |
 | `search_prec_const` | 헌법재판소 결정례를 검색합니다. | `query`: 검색어 (예: "위헌") |

@@ -53,61 +53,13 @@ def get_statute_detail(law_id: str) -> str:
     law_info = data['법령']
     name = law_info.get('기본정보', {}).get('법령명_한글', 'Unknown')
     
-    articles = []
-    # Articles are in '조문' -> '조문단위'
-    try:
-        # '조문' might be missing if the law has no articles (unlikely)
-        jomun_section = law_info.get('조문', {})
-        if not jomun_section:
-            return f"# {name}\n\n(No articles found)"
-
-        body = jomun_section.get('조문단위', [])
-        if not isinstance(body, list):
-            body = [body]
-            
-        for item in body:
-            # Check for '조문내용' (Article Content)
-            content = item.get('조문내용', '')
-            # If empty, sometimes content is in text node or formatted differently
-            if not content and '#text' in item:
-                content = item['#text']
-            
-            # Remove excessive whitespace
-            content = content.strip()
-            
-            article_no = item.get('조문번호', '?')
-            title = item.get('조문제목', '')
-            
-            if title:
-                header = f"제{article_no}조({title})"
-            else:
-                header = f"제{article_no}조"
-            
-            articles.append(f"{header}: {content}")
-            
-            # Sub-paragraphs (항)
-            paragraphs = item.get('항', [])
-            if not isinstance(paragraphs, list):
-                paragraphs = [paragraphs]
-            
-            for p in paragraphs:
-                p_content = p.get('항내용', '').strip()
-                p_no = p.get('항번호', '')
-                if p_content:
-                    articles.append(f"  {p_no}. {p_content}")
-                    
-                # Sub-sub-paragraphs (호) are inside '항' -> '호'
-                hos = p.get('호', [])
-                if not isinstance(hos, list):
-                    hos = [hos]
-                for h in hos:
-                    h_content = h.get('호내용', '').strip()
-                    h_no = h.get('호번호', '')
-                    if h_content:
-                        articles.append(f"    {h_no}. {h_content}")
-
-    except Exception as e:
-        return f"Error parsing articles: {str(e)}"
+    parsed_articles = _parse_articles(law_info)
+    
+    if not parsed_articles:
+         return f"# {name}\n\n(No articles found)"
+    
+    articles_text = [a['full_text'] for a in parsed_articles]
+    return f"# {name}\n\n" + "\n".join(articles_text)
 
     return f"# {name}\n\n" + "\n".join(articles)
 
@@ -435,6 +387,101 @@ def get_admin_rule_detail(adm_id: str) -> str:
             content_acc.append("(No content found.)")
         
     return f"# {name} ({dept})\n\n" + "\n".join(content_acc)
+
+def _parse_articles(law_info: dict) -> list[dict]:
+    """
+    Helper to parse articles from law info dictionary.
+    Returns a list of dicts: {'no': str, 'title': str, 'full_text': str}
+    """
+    articles = []
+    # Articles are in '조문' -> '조문단위'
+    try:
+        jomun_section = law_info.get('조문', {})
+        if not jomun_section:
+            return []
+
+        body = jomun_section.get('조문단위', [])
+        if not isinstance(body, list):
+            body = [body]
+            
+        for item in body:
+            # Check for '조문내용' (Article Content)
+            content = item.get('조문내용', '')
+            # If empty, sometimes content is in text node or formatted differently
+            if not content and '#text' in item:
+                content = item['#text']
+            
+            content = content.strip()
+            
+            article_no = item.get('조문번호', '?')
+            title = item.get('조문제목', '')
+            
+            full_text_lines = []
+            
+            if title:
+                header = f"제{article_no}조({title})"
+            else:
+                header = f"제{article_no}조"
+            
+            full_text_lines.append(f"{header}: {content}")
+            
+            # Sub-paragraphs (항)
+            paragraphs = item.get('항', [])
+            if not isinstance(paragraphs, list):
+                paragraphs = [paragraphs]
+            
+            for p in paragraphs:
+                p_content = p.get('항내용', '').strip()
+                p_no = p.get('항번호', '')
+                if p_content:
+                    full_text_lines.append(f"  {p_no}. {p_content}")
+                    
+                # Sub-sub-paragraphs (호) are inside '항' -> '호'
+                hos = p.get('호', [])
+                if not isinstance(hos, list):
+                    hos = [hos]
+                for h in hos:
+                    h_content = h.get('호내용', '').strip()
+                    h_no = h.get('호번호', '')
+                    if h_content:
+                        full_text_lines.append(f"    {h_no}. {h_content}")
+            
+            articles.append({
+                'no': str(article_no),
+                'title': title,
+                'full_text': "\n".join(full_text_lines)
+            })
+
+    except Exception as e:
+        logger.error(f"Error parsing articles: {e}")
+        return []
+        
+    return articles
+
+@mcp.tool()
+def get_statute_article(law_id: str, article_no: str) -> str:
+    """
+    Get the full text of a specific article from a statute.
+    Args:
+        law_id: The ID of the law (from search_statute).
+        article_no: The article number (e.g., "20", "20-2").
+    """
+    logger.info(f"Getting article {article_no} for law ID: {law_id}")
+    data = client.get_law_detail(law_id)
+    
+    if '법령' not in data:
+        return "Error: Invalid response structure (Missing '법령')"
+        
+    law_info = data['법령']
+    name = law_info.get('기본정보', {}).get('법령명_한글', 'Unknown')
+    
+    parsed_articles = _parse_articles(law_info)
+    
+    for art in parsed_articles:
+        if art['no'] == article_no:
+            return f"# {name} 제{article_no}조\n\n" + art['full_text']
+            
+    return f"Article {article_no} not found in {name}."
 
 def main():
     mcp.run()
