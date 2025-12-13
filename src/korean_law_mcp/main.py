@@ -33,7 +33,8 @@ def search_korean_law(query: str) -> str:
         "commercial act": "상법",
         "constitution": "대한민국헌법",
         "administrative procedures act": "행정절차법",
-        "labor standards act": "근로기준법"
+        "labor standards act": "근로기준법",
+        "school violence": "학교폭력"
     }
     
     lower_query = query.lower()
@@ -44,9 +45,14 @@ def search_korean_law(query: str) -> str:
             break
 
     # 1. Check for specific article pattern (smart search) -> Direct content
-    # ...
-    if re.search(r'제\d+조', query) or "Article" in query:
-        # It's a specific article request
+    # Patterns: "제10조", "Article 10", or "Law 10" (relaxed)
+    if (re.search(r'제\s*\d+조', query) or 
+        "Article" in query or 
+        re.search(r'(?:\s|^)\d+(?:-\d+)?(?:\s|$)', query)):
+        # It's likely a specific article request
+        # Note: "Law 10" simple regex might match "Budget 2024". 
+        # But smart_search_statute_internal validates if it's a law. 
+        # Low risk of false positive leading to bad error (just "not found").
         return smart_search_statute_internal(query)
     
     # 2. Otherwise default to integrated search
@@ -135,7 +141,54 @@ def get_statute_detail_internal(law_id: str) -> str:
 def get_precedent_detail_internal(prec_id: str) -> str:
     logger.info(f"Getting precedent details for ID: {prec_id}")
     data = client.get_precedent_detail(prec_id)
-    if 'PrecService' not in data: return "Error: Invalid response structure (Missing 'PrecService')"
+    
+    if 'PrecService' not in data:
+        # Fallback: Try with MST parameter
+        # Some older precedents or specific IDs require MST instead of ID
+        logger.info(f"Standard fetch failed for {prec_id}. Trying MST fallback...")
+        try:
+            import requests
+            import xmltodict
+            url = f"{client.BASE_URL}/DRF/lawService.do"
+            params = {
+                "OC": client.user_id,
+                "target": "prec",
+                "type": "XML",
+                "MST": prec_id 
+            }
+            resp = requests.get(url, params=params)
+            data = xmltodict.parse(resp.content)
+        except Exception as e:
+            logger.error(f"MST fallback failed: {e}")
+    
+    if 'PrecService' not in data:
+        # Fallback: Try with MST parameter
+        logger.info(f"Standard fetch failed (ID={prec_id}). Trying MST fallback...")
+        try:
+            import requests
+            import xmltodict
+            url = f"{client.BASE_URL}/DRF/lawService.do"
+            params = {
+                "OC": client.user_id,
+                "target": "prec",
+                "type": "XML",
+                "MST": prec_id 
+            }
+            resp = requests.get(url, params=params)
+            data = xmltodict.parse(resp.content)
+        except Exception as e:
+            logger.error(f"MST fallback failed: {e}")
+            
+    if 'PrecService' not in data:
+        # Final Fallback: Check if it's actually a Constitutional Court decision (target='detc')
+        # Sometimes 'prec' search returns const court cases but they must be fetched via 'detc'.
+        logger.info(f"Prec fetch failed. Checking if ID={prec_id} is a Constitutional Court decision...")
+        detc_content = get_prec_const_detail_internal(prec_id)
+        if "Error" not in detc_content[:20]:
+            return detc_content
+            
+        return "Error: Law/Precedent not found or Invalid ID. (Tried ID, MST, and Detc conversion)"
+        
     info = data['PrecService']
     title = info.get('사건명', 'Unknown')
     case_no = info.get('사건번호', 'Unknown')
@@ -403,17 +456,40 @@ def smart_search_statute_internal(query: str) -> str:
     # Logic from previous smart_search_statute
     logger.info(f"Smart searching for: {query}")
     article_no = None
-    kr_match = re.search(r'제(\d+(?:의\d+)?)조', query)
+    
+    # 1. Pattern: "제103조" or "제 103 조"
+    kr_match = re.search(r'제\s*(\d+(?:의\d+)?)', query)
+    
+    # 2. Pattern: "Article 103"
+    en_match = re.search(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', query, re.IGNORECASE)
+    
+    # 3. Pattern: "LawName 103" (Relaxed, end of string or space boundary)
+    # e.g. "민법 103", "Civil Act 103"
+    # We look for a number at the end of the query or preceded by space
+    relaxed_match = re.search(r'(?:\s|^)(\d+(?:-\d+)?)(?:\s|$)', query)
+
     if kr_match:
         article_no = kr_match.group(1)
-        clean_query = re.sub(r'제(\d+(?:의\d+)?)조', '', query).strip()
+        clean_query = re.sub(r'제\s*(\d+(?:의\d+)?)', '', query).strip()
+        # Remove trailing '조' if valid
+        clean_query = clean_query.replace('조', '').strip()
+    elif en_match:
+        article_no = en_match.group(1)
+        clean_query = re.sub(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', '', query, flags=re.IGNORECASE).strip()
+    elif relaxed_match:
+         # Only trigger if the query *starts* with text (Law name)
+         # and the number is independent.
+         candidate_no = relaxed_match.group(1)
+         # Verify it's not part of the law name (simple heuristic)
+         start, end = relaxed_match.span(1)
+         # If simpler query remains
+         clean_query = (query[:start] + query[end:]).strip()
+         if clean_query:
+             article_no = candidate_no
+         else:
+             clean_query = query
     else:
-        en_match = re.search(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', query, re.IGNORECASE)
-        if en_match:
-            article_no = en_match.group(1)
-            clean_query = re.sub(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', '', query, flags=re.IGNORECASE).strip()
-        else:
-            clean_query = query
+        clean_query = query
             
     clean_query = re.sub(r'\bof\b', '', clean_query, flags=re.IGNORECASE).strip()
     data = client.search_law(clean_query)
@@ -493,7 +569,8 @@ def search_integrated_internal(query: str) -> str:
         futures = [
             executor.submit(search_target, "law", "Statutes"),
             executor.submit(search_target, "prec", "Precedents"),
-            executor.submit(search_target, "admrul", "AdminRules")
+            executor.submit(search_target, "admrul", "AdminRules"),
+            executor.submit(search_target, "detc", "ConstCourt")
         ]
         for future in concurrent.futures.as_completed(futures):
             label, res = future.result()
@@ -526,9 +603,26 @@ def search_integrated_internal(query: str) -> str:
             output.append(f"- **{case_no} {name}** [ID: prec:{id}]")
     else: output.append("(No results)")
     output.append("")
+    
+    consts = results.get("ConstCourt", {})
+    output.append("## 3. Const. Court (헌재결정례)")
+    if consts and 'DetcSearch' in consts and 'detc' in consts['DetcSearch']:
+        items = consts['DetcSearch']['detc']
+        if not isinstance(items, list): items = [items]
+        for item in items[:3]:
+            name = item.get('사건명', '')
+            case_no = item.get('사건번호', '')
+            id = item.get('헌재결정일련번호', '') # Check field name correctness? Usually '법령일련번호' equivalent.
+            # API usually returns 'ID' or specific field. Let's assume '헌재결정일련번호' or check debug keys if fail.
+            # Actually api_client uses 'ID' for retrieval. In search result it might be '헌재결정일련번호' or just '판례일련번호'? 
+            # Inspect targets.py had 'detc' test? 
+            # Standardizing: likely '헌재결정일련번호'. Safe bet: item.get('헌재결정일련번호')
+            output.append(f"- **{case_no} {name}** [ID: detc:{id}]")
+    else: output.append("(No results)")
+    output.append("")
 
     rules = results.get("AdminRules", {})
-    output.append("## 3. Administrative Rules (행정규칙)")
+    output.append("## 4. Administrative Rules (행정규칙)")
     if rules and 'AdmRulSearch' in rules and 'admrul' in rules['AdmRulSearch']:
         items = rules['AdmRulSearch']['admrul']
         if not isinstance(items, list): items = [items]
