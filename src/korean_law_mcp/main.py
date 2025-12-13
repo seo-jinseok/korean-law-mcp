@@ -2,6 +2,8 @@ from mcp.server.fastmcp import FastMCP
 from .api_client import KoreanLawClient
 import logging
 import os
+import re
+import concurrent.futures
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,107 +14,133 @@ mcp = FastMCP("Korean Law MCP")
 client = KoreanLawClient()
 
 @mcp.tool()
-def search_statute(query: str) -> str:
+def search_korean_law(query: str) -> str:
     """
-    Search for Korean statutes (법령) by query.
-    Returns a list of matching laws with their IDs.
+    Unified search tool for Korean Law including Statutes, Precedents, and Admin Rules.
+    
+    Capabilities:
+    1. Smart Statute Lookup: "고등교육법 제20조" -> Directly returns the article content.
+    2. Broad Search: "학교폭력" -> Returns a summary of Statutes, Precedents, and Rules.
+    
+    Output Format:
+    - Provides summaries or specific content.
+    - Uses Typed IDs (e.g., `statute:12345`, `prec:56789`) for further reading.
     """
+    # 0. English to Korean Mapping for major laws
+    ENGLISH_LAW_MAPPING = {
+        "civil act": "민법",
+        "criminal act": "형법",
+        "commercial act": "상법",
+        "constitution": "대한민국헌법",
+        "administrative procedures act": "행정절차법",
+        "labor standards act": "근로기준법"
+    }
+    
+    lower_query = query.lower()
+    for eng, kor in ENGLISH_LAW_MAPPING.items():
+        if eng in lower_query:
+            query = re.sub(eng, kor, query, flags=re.IGNORECASE)
+            logger.info(f"Translated English query to: {query}")
+            break
+
+    # 1. Check for specific article pattern (smart search) -> Direct content
+    # ...
+    if re.search(r'제\d+조', query) or "Article" in query:
+        # It's a specific article request
+        return smart_search_statute_internal(query)
+    
+    # 2. Otherwise default to integrated search
+    return search_integrated_internal(query)
+
+@mcp.tool()
+def read_legal_resource(resource_id: str) -> str:
+    """
+    Read the full content of a legal resource using its Typed ID.
+    
+    Args:
+        resource_id: A typed ID string (e.g., "statute:12345", "prec:67890", "admrul:54321").
+        
+    Returns:
+        Full content in Markdown, with resolved cross-references appended if applicable.
+    """
+    logger.info(f"Reading resource: {resource_id}")
+    
+    try:
+        if ":" not in resource_id:
+            return "Error: Invalid ID format. Expected 'type:id' (e.g. statute:12345)."
+            
+        r_type, r_id = resource_id.split(":", 1)
+        
+        content = ""
+        
+        if r_type == "statute":
+            content = get_statute_detail_internal(r_id)
+            
+        elif r_type == "prec":
+            content = get_precedent_detail_internal(r_id)
+            
+        elif r_type == "admrul":
+            content = get_admin_rule_detail_internal(r_id)
+            
+        elif r_type == "const":
+            content = get_prec_const_detail_internal(r_id)
+            
+        elif r_type == "ordin":
+            content = get_autonomous_law_detail_internal(r_id)
+            
+        else:
+            return f"Error: Unknown resource type '{r_type}'."
+            
+        # Auto-resolve references for statutes and maybe others
+        # We only resolve if content was successfully retrieved
+        if content and not content.startswith("Error"):
+             refs = resolve_references(content)
+             if "No specific cross-references" not in refs:
+                 content += "\n\n" + refs
+                 
+        return content
+            
+    except Exception as e:
+        return f"Error reading resource: {e}"
+
+# --- Internal Implementations (Migrated from Tools) ---
+
+def search_statute_internal(query: str) -> str:
+    # Original search_statute logic
     logger.info(f"Searching for: {query}")
     data = client.search_law(query)
-    
     if 'LawSearch' not in data or 'law' not in data['LawSearch']:
         return "No results found."
-        
     laws = data['LawSearch']['law']
-    if not isinstance(laws, list):
-        laws = [laws]
-        
+    if not isinstance(laws, list): laws = [laws]
     output = []
     for law in laws:
         name = law.get('법령명한글', 'Unknown')
-        # The API sometimes returns '법령일련번호' as the ID we need for details
         id = law.get('법령일련번호', 'Unknown') 
         date = law.get('공포일자', 'Unknown')
-        output.append(f"ID: {id} | Name: {name} | Date: {date}")
-        
+        output.append(f"ID: statute:{id} | Name: {name} | Date: {date}")
     return "\n".join(output)
 
-@mcp.tool()
-def get_statute_detail(law_id: str) -> str:
-    """
-    Get the full text of a specific statute using its ID.
-    User 'search_statute' first to find the ID.
-    """
+def get_statute_detail_internal(law_id: str) -> str:
     logger.info(f"Getting details for ID: {law_id}")
     data = client.get_law_detail(law_id)
-    
-    # Root element is '법령' (Statute)
-    if '법령' not in data:
-        return "Error: Invalid response structure (Missing '법령')"
-        
+    if '법령' not in data: return "Error: Law not found."
     law_info = data['법령']
     name = law_info.get('기본정보', {}).get('법령명_한글', 'Unknown')
-    
     parsed_articles = _parse_articles(law_info)
-    
-    if not parsed_articles:
-         return f"# {name}\n\n(No articles found)"
-    
+    if not parsed_articles: return f"# {name}\n\n(No articles found)"
     articles_text = [a['full_text'] for a in parsed_articles]
     return f"# {name}\n\n" + "\n".join(articles_text)
 
-    return f"# {name}\n\n" + "\n".join(articles)
-
-@mcp.tool()
-def search_precedent(query: str) -> str:
-    """
-    Search for Korean legal precedents (판례) by query.
-    Returns a list of matching precedents with their IDs and case numbers.
-    """
-    logger.info(f"Searching precedents for: {query}")
-    # target='prec' for precedents
-    data = client.search_law(query, target="prec")
-    
-    if 'PrecSearch' not in data or 'prec' not in data['PrecSearch']:
-        return "No results found."
-        
-    precs = data['PrecSearch']['prec']
-    if not isinstance(precs, list):
-        precs = [precs]
-    
-    output = []
-    for p in precs:
-        name = p.get('사건명', 'Unknown')
-        id = p.get('판례일련번호', 'Unknown')
-        case_no = p.get('사건번호', 'Unknown')
-        date = p.get('선고일자', 'Unknown')
-        court = p.get('법원명', '')
-        output.append(f"ID: {id} | Case: {case_no} | Name: {name} | Court: {court} | Date: {date}")
-        
-    return "\n".join(output)
-
-@mcp.tool()
-def get_precedent_detail(prec_id: str) -> str:
-    """
-    Get the full text/details of a specific precedent using its ID.
-    Use 'search_precedent' first to find the ID.
-    """
+def get_precedent_detail_internal(prec_id: str) -> str:
     logger.info(f"Getting precedent details for ID: {prec_id}")
     data = client.get_precedent_detail(prec_id)
-    
-    if 'PrecService' not in data:
-        return "Error: Invalid response structure (Missing 'PrecService')"
-        
+    if 'PrecService' not in data: return "Error: Invalid response structure (Missing 'PrecService')"
     info = data['PrecService']
-    
-    # Extract key fields
     title = info.get('사건명', 'Unknown')
     case_no = info.get('사건번호', 'Unknown')
     date = info.get('선고일자', 'Unknown')
     court = info.get('법원명', 'Unknown')
-    
-    # HTML formatting is often used in content, might need stripping if we want pure text, 
-    # but LLMs can handle basic HTML tags.
     summary = info.get('판결요지', '')
     content = info.get('판례내용', '')
     holding = info.get('판시사항', '')
@@ -120,8 +148,8 @@ def get_precedent_detail(prec_id: str) -> str:
     def clean_html(text):
         if not text: return ""
         text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
-        return text
-    
+        return text.strip()
+        
     output = [
         f"# {title}",
         f"**Case No:** {case_no}",
@@ -137,63 +165,58 @@ def get_precedent_detail(prec_id: str) -> str:
         "## 판례내용 (Full Text)",
         clean_html(content)
     ]
-    
     return "\n".join(output)
 
-@mcp.tool()
-def search_prec_const(query: str) -> str:
-    """
-    Search for Constitutional Court decisions (헌재결정례).
-    Returns list with IDs and Case Numbers.
-    """
-    logger.info(f"Searching const. decisions for: {query}")
-    data = client.search_law(query, target="detc")
+def get_admin_rule_detail_internal(adm_id: str) -> str:
+    logger.info(f"Getting admin rule details for ID: {adm_id}")
+    data = client.get_admin_rule_detail(adm_id)
+    if 'AdmRulService' not in data: return "Error: Invalid response structure (Missing 'AdmRulService')"
+    root = data['AdmRulService']
+    info = root.get('행정규칙기본정보', {})
+    name = info.get('행정규칙명', 'Unknown')
+    dept = info.get('소관부처명', '')
     
-    if 'DetcSearch' not in data or 'Detc' not in data['DetcSearch']:
-        return "No results found."
-        
-    items = data['DetcSearch']['Detc']
-    if not isinstance(items, list):
-        items = [items]
-        
-    output = []
-    for item in items:
-        name = item.get('사건명', 'Unknown')
-        id = item.get('헌재결정례일련번호', 'Unknown')
-        case_no = item.get('사건번호', 'Unknown')
-        date = item.get('종국일자', 'Unknown')
-        output.append(f"ID: {id} | Case: {case_no} | Name: {name} | Date: {date}")
-        
-    return "\n".join(output)
+    content_acc = []
+    def clean_html(text):
+        if not text: return ""
+        text = str(text)
+        text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
+        return text.strip()
 
-@mcp.tool()
-def get_prec_const_detail(detc_id: str) -> str:
-    """
-    Get details of a Constitutional Court decision.
-    """
+    if '조문내용' in root:
+        content = root['조문내용']
+        if isinstance(content, str): content_acc.append(clean_html(content))
+        elif isinstance(content, list):
+             for c in content: content_acc.append(clean_html(str(c)))
+    
+    if not content_acc:
+        full_text = root.get('전문', '')
+        if full_text: content_acc.append(clean_html(full_text))
+            
+    if not content_acc:
+        buchik = root.get('부칙')
+        if buchik: content_acc.append("\n[부칙]\n" + clean_html(str(buchik)))
+        else: content_acc.append("(No content found.)")
+        
+    return f"# {name} ({dept})\n\n" + "\n".join(content_acc)
+
+def get_prec_const_detail_internal(detc_id: str) -> str:
     logger.info(f"Getting const. decision details for ID: {detc_id}")
     data = client.get_prec_const_detail(detc_id)
-    
-    if 'DetcService' not in data:
-        return "Error: Invalid response structure (Missing 'DetcService')"
-        
+    if 'DetcService' not in data: return "Error: Invalid response structure (Missing 'DetcService')"
     info = data['DetcService']
-    
     title = info.get('사건명', 'Unknown')
     case_no = info.get('사건번호', 'Unknown')
     date = info.get('종국일자', 'Unknown')
     type_name = info.get('사건종류명', '')
-    
-    # Text fields
     holding = info.get('판시사항', '')
     summary = info.get('결정요지', '')
     content = info.get('전문', '')
     
     def clean_html(text):
         if not text: return ""
-        text = str(text) # Ensure string
+        text = str(text)
         text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
-        # Remove CDATA if present (xmltodict usually handles this but just in case)
         text = text.replace("<![CDATA[", "").replace("]]>", "")
         return text.strip()
         
@@ -212,89 +235,31 @@ def get_prec_const_detail(detc_id: str) -> str:
         "## 전문 (Full Text)",
         clean_html(content)
     ]
-    
     return "\n".join(output)
 
-@mcp.tool()
-def search_autonomous_law(query: str) -> str:
-    """
-    Search for Autonomous Laws (자치법규 - Ordinances/Rules of Local Gov).
-    Returns list with IDs (MST) and Names.
-    """
-    logger.info(f"Searching autonomous laws for: {query}")
-    data = client.search_law(query, target="ordin")
-    
-    if 'OrdinSearch' not in data or 'law' not in data['OrdinSearch']:
-        return "No results found."
-        
-    items = data['OrdinSearch']['law']
-    if not isinstance(items, list):
-        items = [items]
-        
-    output = []
-    for item in items:
-        name = item.get('자치법규명', 'Unknown')
-        # Important: Ordin uses '자치법규일련번호' which maps to MST param
-        id = item.get('자치법규일련번호', 'Unknown')
-        
-        gov = item.get('지자체기관명', '')
-        date = item.get('공포일자', '')
-        type_name = item.get('자치법규종류', '') # e.g. 조례, 규칙
-        
-        output.append(f"ID: {id} | Gov: {gov} | Type: {type_name} | Name: {name} | Date: {date}")
-        
-    return "\n".join(output)
-
-@mcp.tool()
-def get_autonomous_law_detail(law_id: str) -> str:
-    """
-    Get details of an Autonomous Law.
-    """
+def get_autonomous_law_detail_internal(law_id: str) -> str:
     logger.info(f"Getting autonomous law details for ID: {law_id}")
     data = client.get_autonomous_law_detail(law_id)
-    
-    # Root is 'LawService'?? Based on snippet.
-    # But usually inside it is '자치법규기본정보'.
-    if 'LawService' not in data:
-        return "Error: Invalid response structure (Missing 'LawService')"
+    if 'LawService' not in data: return "Error: Invalid response structure (Missing 'LawService')"
     
     root = data['LawService']
     info = root.get('자치법규기본정보', {})
-    
     name = info.get('자치법규명', 'Unknown')
     gov = info.get('지자체기관명', '')
     
-    # For content: Try to find '조문' (Articles) similar to Statutes
-    # or '부칙' (Addenda)
-    
     articles = []
-    # In Ordin, articles might be under '조문' key in LawService or inside 기본정보?
-    # Usually it's a sibling of 기본정보.
-    
     jomun_section = root.get('조문', {})
     if jomun_section:
-        # Check for '조문단위' (Standard Law) or '조' (Ordinance)
         body = jomun_section.get('조문단위') or jomun_section.get('조') or []
-        
-        if not isinstance(body, list):
-            body = [body]
-        
+        if not isinstance(body, list): body = [body]
         for item in body:
-            # Handle field name variations
             content = item.get('조문내용') or item.get('조내용') or ''
             content = content.strip()
-            
-            # Fallback for text-only nodes
-            if not content and '#text' in item:
-                 content = item['#text'].strip()
-            
+            if not content and '#text' in item: content = item['#text'].strip()
             no = item.get('조문번호', '?')
             title = item.get('조문제목') or item.get('조제목') or ''
-            
             header = f"제{no}조({title})" if title else f"제{no}조"
             articles.append(f"{header}: {content}")
-            
-            # Simple handling of paragraphs for now
             if '항' in item:
                 paragraphs = item['항']
                 if not isinstance(paragraphs, list): paragraphs = [paragraphs]
@@ -302,91 +267,8 @@ def get_autonomous_law_detail(law_id: str) -> str:
                     p_content = p.get('항내용', '').strip()
                     p_no = p.get('항번호', '')
                     if p_content: articles.append(f"  {p_no}. {p_content}")
-
-    if not articles:
-        articles.append("(No parsed articles found. The law might use a different structure or be empty.)")
-
+    if not articles: articles.append("(No parsed articles found. The law might use a different structure or be empty.)")
     return f"# {name} ({gov})\n\n" + "\n".join(articles)
-
-@mcp.tool()
-def search_admin_rule(query: str) -> str:
-    """
-    Search for Administrative Rules (행정규칙 - Notices, Directives).
-    Returns list with IDs and Names.
-    """
-    logger.info(f"Searching admin rules for: {query}")
-    data = client.search_law(query, target="admrul")
-    
-    if 'AdmRulSearch' not in data or 'admrul' not in data['AdmRulSearch']:
-        return "No results found."
-        
-    items = data['AdmRulSearch']['admrul']
-    if not isinstance(items, list):
-        items = [items]
-        
-    output = []
-    for item in items:
-        name = item.get('행정규칙명', 'Unknown')
-        id = item.get('행정규칙일련번호', 'Unknown')
-        dept = item.get('소관부처명', '')
-        date = item.get('발령일자', '')
-        type_name = item.get('행정규칙종류', '')
-        
-        output.append(f"ID: {id} | Dept: {dept} | Type: {type_name} | Name: {name} | Date: {date}")
-        
-    return "\n".join(output)
-
-@mcp.tool()
-def get_admin_rule_detail(adm_id: str) -> str:
-    """
-    Get details of an Administrative Rule.
-    """
-    logger.info(f"Getting admin rule details for ID: {adm_id}")
-    data = client.get_admin_rule_detail(adm_id)
-    
-    if 'AdmRulService' not in data:
-        return "Error: Invalid response structure (Missing 'AdmRulService')"
-        
-    root = data['AdmRulService']
-    info = root.get('행정규칙기본정보', {})
-    
-    name = info.get('행정규칙명', 'Unknown')
-    dept = info.get('소관부처명', '')
-    
-    content_acc = []
-    
-    def clean_html(text):
-        if not text: return ""
-        text = str(text)
-        text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
-        return text.strip()
-
-    # 1. '조문내용' (Article Content) usually contains the main text or articles
-    if '조문내용' in root:
-        content = root['조문내용']
-        if isinstance(content, str):
-             # Often it's just raw text or HTML-like text
-             content_acc.append(clean_html(content))
-        elif isinstance(content, list):
-             # If it's a list, treat as lines?
-             for c in content:
-                 content_acc.append(clean_html(str(c)))
-    
-    # 2. Check for '전문' (Full text) if empty
-    if not content_acc:
-        full_text = root.get('전문', '')
-        if full_text:
-            content_acc.append(clean_html(full_text))
-            
-    if not content_acc:
-        # Try '부칙' (Addenda) if main content empty?
-        buchik = root.get('부칙')
-        if buchik:
-            content_acc.append("\n[부칙]\n" + clean_html(str(buchik)))
-        else:
-            content_acc.append("(No content found.)")
-        
-    return f"# {name} ({dept})\n\n" + "\n".join(content_acc)
 
 def _parse_articles(law_info: dict) -> list[dict]:
     """
@@ -419,11 +301,24 @@ def _parse_articles(law_info: dict) -> list[dict]:
             full_text_lines = []
             
             if title:
-                header = f"제{article_no}조({title})"
+                header_text = f"제{article_no}조({title})"
             else:
-                header = f"제{article_no}조"
+                header_text = f"제{article_no}조"
             
-            full_text_lines.append(f"{header}: {content}")
+            # Prevent duplication if content already starts with the header
+            # Normalize spaces for comparison
+            normalized_content = content.replace(" ", "")
+            normalized_header = header_text.replace(" ", "")
+            
+            if normalized_content.startswith(normalized_header):
+                # formatting: "Title: Title content..."
+                # If content is exactly the header, maybe it's just a title line?
+                # We'll just use the content as is, but often we want to format it nicely.
+                # If we prepended header, it would be "Title: Title content..." -> Duplicate.
+                # So we just use content.
+                full_text_lines.append(content)
+            else:
+                full_text_lines.append(f"{header_text}: {content}")
             
             # Sub-paragraphs (항)
             paragraphs = item.get('항', [])
@@ -434,22 +329,32 @@ def _parse_articles(law_info: dict) -> list[dict]:
                 p_content = p.get('항내용', '').strip()
                 p_no = p.get('항번호', '')
                 if p_content:
-                    full_text_lines.append(f"  {p_no}. {p_content}")
+                    # Sometimes p_content also starts with p_no (e.g. "① Text")
+                    if p_content.startswith(p_no):
+                        full_text_lines.append(f"  {p_content}")
+                    else:
+                        full_text_lines.append(f"  {p_no}. {p_content}")
                     
                 # Sub-sub-paragraphs (호) are inside '항' -> '호'
                 hos = p.get('호', [])
                 if not isinstance(hos, list):
                     hos = [hos]
                 for h in hos:
-                    h_content = h.get('호내용', '').strip()
-                    h_no = h.get('호번호', '')
-                    if h_content:
-                        full_text_lines.append(f"    {h_no}. {h_content}")
+                    h_content = h.get('호번호', '') + " " + h.get('호내용', '').strip()
+                    h_content = h_content.strip()
+                    full_text_lines.append(f"    {h_content}")
+            
+            # Deduplicate items in TOC generation
+            # We can't easily dedupe here, but we can ensure we don't produce empty entries
+            
+            # Extract '조문여부' to distinguish between headers ("전문") and content ("조문")
+            art_type = item.get('조문여부', '')
             
             articles.append({
                 'no': str(article_no),
                 'title': title,
-                'full_text': "\n".join(full_text_lines)
+                'full_text': "\n".join(full_text_lines),
+                'type': art_type
             })
 
     except Exception as e:
@@ -458,8 +363,7 @@ def _parse_articles(law_info: dict) -> list[dict]:
         
     return articles
 
-@mcp.tool()
-def get_statute_article(law_id: str, article_no: str) -> str:
+def get_statute_article_internal(law_id: str, article_no: str) -> str:
     """
     Get the full text of a specific article from a statute.
     Args:
@@ -479,12 +383,245 @@ def get_statute_article(law_id: str, article_no: str) -> str:
     
     for art in parsed_articles:
         if art['no'] == article_no:
-            return f"# {name} 제{article_no}조\n\n" + art['full_text']
+            # If we find a content article, return immediately. 
+            # If we find a header, store it but keep looking.
+            if art.get('type') == '조문':
+                return f"# {name} 제{article_no}조\n\n" + art['full_text']
             
+            # If we haven't found a content article yet, maybe this header is the best we got?
+            # But usually we want to keep looking.
+            pass
+            
+    # Second pass: if we are here, we didn't find "조문". Return the first match (header) if any.
+    for art in parsed_articles:
+        if art['no'] == article_no:
+             return f"# {name} 제{article_no}조\n\n" + art['full_text']
+
     return f"Article {article_no} not found in {name}."
+
+def smart_search_statute_internal(query: str) -> str:
+    # Logic from previous smart_search_statute
+    logger.info(f"Smart searching for: {query}")
+    article_no = None
+    kr_match = re.search(r'제(\d+(?:의\d+)?)조', query)
+    if kr_match:
+        article_no = kr_match.group(1)
+        clean_query = re.sub(r'제(\d+(?:의\d+)?)조', '', query).strip()
+    else:
+        en_match = re.search(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', query, re.IGNORECASE)
+        if en_match:
+            article_no = en_match.group(1)
+            clean_query = re.sub(r'(?:Article|Art\.?)\s*(\d+(?:-\d+)?)', '', query, flags=re.IGNORECASE).strip()
+        else:
+            clean_query = query
+            
+    clean_query = re.sub(r'\bof\b', '', clean_query, flags=re.IGNORECASE).strip()
+    data = client.search_law(clean_query)
+    if 'LawSearch' not in data or 'law' not in data['LawSearch']:
+        return f"No laws found for query: '{clean_query}'"
+    items = data['LawSearch']['law']
+    if not isinstance(items, list): items = [items]
+    
+    best_match = None
+    exact_matches = [i for i in items if i.get('법령명한글', '').replace(' ', '') == clean_query.replace(' ', '')]
+    statute_matches = [i for i in items if i.get('법령구분명') == '법률']
+    
+    if exact_matches:
+        best_match = exact_matches[0]
+        for m in exact_matches:
+            if m.get('현행연혁코드') == '현행':
+                best_match = m
+                break
+    elif statute_matches: best_match = statute_matches[0]
+    else: best_match = items[0]
+        
+    law_name = best_match.get('법령명한글', 'Unknown')
+    law_id = best_match.get('법령일련번호')
+    if not law_id: return "Error: Selected law has no ID."
+    
+    logger.info(f"Selected law: {law_name} ({law_id})")
+    detail_data = client.get_law_detail(law_id)
+    if '법령' not in detail_data: return "Error: Could not retrieve law details."
+    law_info = detail_data['법령']
+    parsed_articles = _parse_articles(law_info)
+    
+    if article_no:
+        # Priority Search for Content
+        for art in parsed_articles:
+            if art['no'] == article_no and art.get('type') == '조문':
+                return f"# {law_name} 제{article_no}조\n\n{art['full_text']}"
+        
+        # Fallback to any match
+        for art in parsed_articles:
+             if art['no'] == article_no:
+                return f"# {law_name} 제{article_no}조\n\n{art['full_text']}"
+                
+        return f"Article {article_no} not found in {law_name}."
+    else:
+        output = [f"# {law_name}"]
+        enforce_date = law_info.get('기본정보', {}).get('시행일자', '')
+        output.append(f"Enforcement Date: {enforce_date}")
+        output.append("")
+        output.append("## Table of Contents (First 30 Articles)")
+        last_no = None
+        count = 0
+        for art in parsed_articles:
+            if art['no'] == last_no and not art['title']: continue
+            display_title = art['title'] if art['title'] else "(No Title)"
+            output.append(f"- 제{art['no']}조: {display_title}")
+            last_no = art['no']
+            count += 1
+            if count >= 30:
+                output.append(f"... and {len(parsed_articles) - 30} more articles.")
+                break
+        output.append("")
+        output.append("To read a specific article, try searching 'LawName Article X'.")
+        return "\n".join(output)
+
+def search_integrated_internal(query: str) -> str:
+    logger.info(f"Integrated search for: {query}")
+    results = {}
+    def search_target(target, label):
+        try:
+            res = client.search_law(query, target=target)
+            return label, res
+        except Exception as e:
+            logger.error(f"Error searching {label}: {e}")
+            return label, None
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(search_target, "law", "Statutes"),
+            executor.submit(search_target, "prec", "Precedents"),
+            executor.submit(search_target, "admrul", "AdminRules")
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            label, res = future.result()
+            results[label] = res
+            
+    output = [f"# Integrated Search Results for '{query}'\n"]
+    
+    statutes = results.get("Statutes", {})
+    output.append("## 1. Statutes (법령)")
+    if statutes and 'LawSearch' in statutes and 'law' in statutes['LawSearch']:
+        items = statutes['LawSearch']['law']
+        if not isinstance(items, list): items = [items]
+        for item in items[:3]:
+            name = item.get('법령명한글', '')
+            id = item.get('법령일련번호', '')
+            date = item.get('시행일자', '')
+            output.append(f"- **{name}** (Date: {date}) [ID: statute:{id}]")
+    else: output.append("(No results)")
+    output.append("")
+        
+    precs = results.get("Precedents", {})
+    output.append("## 2. Precedents (판례)")
+    if precs and 'PrecSearch' in precs and 'prec' in precs['PrecSearch']:
+        items = precs['PrecSearch']['prec']
+        if not isinstance(items, list): items = [items]
+        for item in items[:3]:
+            name = item.get('사건명', '')
+            case_no = item.get('사건번호', '')
+            id = item.get('판례일련번호', '')
+            output.append(f"- **{case_no} {name}** [ID: prec:{id}]")
+    else: output.append("(No results)")
+    output.append("")
+
+    rules = results.get("AdminRules", {})
+    output.append("## 3. Administrative Rules (행정규칙)")
+    if rules and 'AdmRulSearch' in rules and 'admrul' in rules['AdmRulSearch']:
+        items = rules['AdmRulSearch']['admrul']
+        if not isinstance(items, list): items = [items]
+        for item in items[:3]:
+            name = item.get('행정규칙명', '')
+            id = item.get('행정규칙일련번호', '')
+            dept = item.get('소관부처명', '')
+            output.append(f"- **{name}** ({dept}) [ID: admrul:{id}]")
+    else: output.append("(No results)")
+    return "\n".join(output)
+
+
+def resolve_references(content: str) -> str:
+    """
+    Analyze the provided legal text (e.g., an article content), identify references to other laws/articles,
+    and attempt to fetch basic info or summaries for them.
+    
+    Currently supports:
+    - References to "Article X" within the same law (context needed, but we'll try best guess or just highlight).
+    - References to specific laws by name (e.g. "Higher Education Act").
+    
+    For now, this tool will just extract potential references and suggest searches, 
+    as full resolution requires passing the parent Law ID to be accurate about "Article X".
+    
+    Refined Behavior:
+    - Parses "XX법 제YY조" (Law XX Article YY).
+    - Fetches the referenced Article YY of Law XX.
+    """
+    logger.info("Resolving references...")
+    
+    # Regex for "XX법 제YY조"
+    # This is tricky because "XX법" can be anything.
+    # We'll look for pattern: ([가-힣]+법)\s*제(\d+)조
+    
+    pattern = r'([가-힣]+법)\s*제(\d+)조'
+    matches = re.findall(pattern, content)
+    
+    if not matches:
+        return "No specific cross-references (Link to Law + Article) found in the text."
+        
+    output = ["# Referenced Articles Resolution\n"]
+    
+    # Deduplicate
+    unique_matches = list(set(matches))
+    
+    # Limit resolution to avoiding spamming API
+    if len(unique_matches) > 3:
+        output.append(f"(Found {len(unique_matches)} references. Showing top 3.)\n")
+        unique_matches = unique_matches[:3]
+        
+    for law_name, art_no in unique_matches:
+        output.append(f"## {law_name} Article {art_no}")
+        
+        # 1. Find the law ID
+        try:
+            # Re-use smart search logic slightly manually
+            # We want exact match for law name
+            search_res = client.search_law(law_name)
+            if 'LawSearch' in search_res and 'law' in search_res['LawSearch']:
+                items = search_res['LawSearch']['law']
+                if not isinstance(items, list): items = [items]
+                
+                # Find exact match
+                target_law = None
+                for i in items:
+                    if i.get('법령명한글', '').replace(' ', '') == law_name.replace(' ', ''):
+                        target_law = i
+                        break
+                
+                if not target_law and items:
+                    target_law = items[0] # Fallback
+                
+                if target_law:
+                    law_id = target_law.get('법령일련번호')
+                    
+                    # 2. Get Article
+                    art_text = get_statute_article_internal(law_id, art_no)
+                    output.append(art_text)
+                else:
+                    output.append(f"Could not find law ID for '{law_name}'.")
+            else:
+                output.append(f"Law '{law_name}' not found.")
+                
+        except Exception as e:
+            output.append(f"Error resolving: {e}")
+            
+        output.append("---")
+        
+    return "\n".join(output)
 
 def main():
     mcp.run()
 
 if __name__ == "__main__":
     main()
+
