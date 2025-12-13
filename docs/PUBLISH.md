@@ -2,7 +2,15 @@
 
 PyPI(Python Package Index)에 패키지를 배포하면 사용자들이 `pip install korean-law-mcp` 또는 `uvx korean-law-mcp` 명령어로 매우 쉽게 설치하고 실행할 수 있습니다.
 
-## 1. 사전 준비
+## 0. 자동화 스크립트 사용 (권장)
+`scripts/publish.py`를 사용하면 문서 동기화, 커밋, 태깅, 빌드, PyPI 업로드를 한 번에 처리할 수 있습니다.
+
+```bash
+# 버전이 자동으로 펌프되지는 않으므로 pyproject.toml 버전 수정 후 실행
+python3 scripts/publish.py
+```
+
+## 1. 수동 배포: 사전 준비
 
 ### `pyproject.toml` 정보 수정
 `pyproject.toml` 파일을 열어 다음 항목들을 **반드시** 본인의 정보에 맞게 수정해주세요.
