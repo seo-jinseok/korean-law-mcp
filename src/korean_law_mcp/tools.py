@@ -281,5 +281,83 @@ def read_legal_resource(resource_id: str) -> str:
                  
         return content
             
+        return content
+            
     except Exception as e:
         return f"Error reading resource: {e}"
+
+@mcp.tool()
+def explore_legal_chain(query: str) -> str:
+    """
+    Perform a 'Deep Search' (Legal Graph).
+    Use this when you want to understand the full context of a law provision, including:
+    1. The provision itself.
+    2. Other articles it refers to ("Internal/External References").
+    3. Detailed regulations that define its scope ("Presidential Decree").
+    
+    Usage:
+    - "Higher Education Act Article 20"
+    - "고등교육법 제20조"
+    
+    Returns:
+    - A comprehensive markdown document containing the main article and all connected legal texts.
+    """
+    from .utils import smart_search_statute_internal, client, _parse_articles, resolve_references, resolve_delegation
+    
+    logger.info(f"Exploring legal chain for: {query}")
+    
+    # 1. Resolve Target Law & Article
+    # We reuse smart_search logic but we need the raw ID and Article No to be precise.
+    # So we'll parse the query here manually akin to utils logic or just rely on search.
+    
+    # Parse query
+    # Pattern 1: "LawName Je 20 jo" or "LawNameJe20jo" (Explicit 'Je')
+    match = re.search(r'(.+?)\s*제\s*(\d+)조', query)
+    if not match:
+        # Pattern 2: "LawName 20 jo" (No 'Je', must have space)
+        match = re.search(r'(.+?)\s+(\d+)조', query)
+    
+    if not match:
+         match_en = re.search(r'(.*?)\s*(?:Article|Art\.?)\s*(\d+)', query, re.IGNORECASE)
+         if match_en:
+             law_query = match_en.group(1).strip()
+             art_no = match_en.group(2)
+         else:
+             return "Please provide a specific article, e.g., '고등교육법 제20조' or 'Civil Act Article 5'."
+    else:
+        law_query = match.group(1).strip()
+        art_no = match.group(2)
+
+    # Search Law ID
+    data = client.search_law(law_query)
+    if 'LawSearch' not in data or 'law' not in data['LawSearch']:
+         return f"Could not find law: {law_query}"
+         
+    items = data['LawSearch']['law']
+    if not isinstance(items, list): items = [items]
+    target_law = items[0] # Best guess
+    law_id = target_law.get('법령일련번호')
+    law_name = target_law.get('법령명한글')
+    
+    # 2. Get Main Article Content
+    from .utils import get_statute_article_internal
+    main_text = get_statute_article_internal(law_id, art_no)
+    
+    if "not found" in main_text: return main_text
+    
+    # 3. Resolve References
+    output = [f"# Legal Chain Analysis: {law_name} Article {art_no}\n"]
+    output.append("## 1. Main Provision")
+    output.append(main_text)
+    
+    # Internal/External Refs
+    refs = resolve_references(main_text, context_law_name=law_name, context_law_id=law_id)
+    if refs:
+        output.append("\n" + refs)
+        
+    # Delegations (Act -> Decree)
+    delegations = resolve_delegation(main_text, context_law_name=law_name, context_law_id=law_id, current_article_no=art_no)
+    if delegations:
+        output.append(delegations)
+        
+    return "\n".join(output)

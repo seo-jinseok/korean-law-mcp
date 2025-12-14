@@ -397,68 +397,157 @@ def get_statutory_interpretation_detail_internal(interp_id: str) -> str:
     
     return "\n".join(output)
 
-def resolve_references(content: str) -> str:
+def resolve_references(content: str, context_law_name: str = None, context_law_id: str = None) -> str:
     """
-    Analyze the provided legal text (e.g., an article content), identify references to other laws/articles,
-    and attempt to fetch basic info or summaries for them.
+    Analyze legal text to resolve:
+    1. Internal References ("Article 5") - Uses context_law_id
+    2. External References ("Article 10 of Building Act")
+    3. Delegations ("Presidential Decree") - Finds linked Enforcement Decree
+    
+    Args:
+        content: The text to analyze
+        context_law_name: Name of the law the content belongs to (e.g. "Higher Education Act")
+        context_law_id: ID of the law
     """
-    logger.info("Resolving references...")
+    logger.info(f"Resolving references (Context: {context_law_name})...")
+    output = []
     
-    # Regex for "XX법 제YY조"
-    pattern = r'([가-힣]+법)\s*제(\d+)조'
-    matches = re.findall(pattern, content)
+    # --- 1. explicit External References (XX Act Article YY) ---
+    ext_pattern = r'([가-힣]+법)\s*제(\d+)조'
+    ext_matches = list(set(re.findall(ext_pattern, content)))
     
-    if not matches:
-        return "No specific cross-references (Link to Law + Article) found in the text."
+    # --- 2. Internal References (Article YY) ---
+    # Look for "Article YY" NOT preceded by a law name
+    # We use a negative lookbehind or just simple parsing if we strictly exclude the external ones
+    # Simplified regex: "제\d+조"
+    int_pattern = r'(?<![가-힣])제(\d+)조' 
+    int_matches = []
+    if context_law_id:
+        raw_int_matches = re.findall(int_pattern, content)
+        # Filter out those that were part of external matches
+        # This is a heuristic. Ideally we'd tokenize. 
+        # For now, let's just collect them.
+        for art_no in raw_int_matches:
+            # Check if this "Article X" was captured as "Act Article X"
+            is_external = False
+            for ext_law, ext_art in ext_matches:
+                 if ext_art == art_no and f"{ext_law} 제{ext_art}조" in content:
+                     # This check is weak but acceptable for MVP
+                     pass
+            int_matches.append(art_no)
+        int_matches = list(set(int_matches))
+
+    # --- 3. Gather Content ---
+    
+    resolved_count = 0
+    max_refs = 5
+    
+    # Resolve Internal
+    for art_no in int_matches:
+        if resolved_count >= max_refs: break
+        # Avoid recursion if resolving the article itself
+        # (Caller handles this, but good to be safe)
+        if f"제{art_no}조" in content.split('\n')[0]: continue
         
-    output = ["# Referenced Articles Resolution\n"]
-    
-    # Deduplicate
-    unique_matches = list(set(matches))
-    
-    # Limit resolution to avoiding spamming API
-    if len(unique_matches) > 3:
-        output.append(f"(Found {len(unique_matches)} references. Showing top 3.)\n")
-        unique_matches = unique_matches[:3]
-        
-    for law_name, art_no in unique_matches:
-        output.append(f"## {law_name} Article {art_no}")
-        
-        # 1. Find the law ID
         try:
-            # Re-use smart search logic slightly manually
-            # We want exact match for law name
+            art_text = get_statute_article_internal(context_law_id, art_no)
+            if "not found" not in art_text and "Error" not in art_text:
+                output.append(f"### [Internal] Je{art_no}jo\n{art_text}")
+                resolved_count += 1
+        except Exception as e:
+            logger.error(f"Internal ref error: {e}")
+
+    # Resolve External
+    for law_name, art_no in ext_matches:
+        if resolved_count >= max_refs: break
+        if context_law_name and law_name in context_law_name: continue # Skip self-reference if name matches
+        
+        try:
+            # Search for law ID
             search_res = client.search_law(law_name)
             if 'LawSearch' in search_res and 'law' in search_res['LawSearch']:
-                items = search_res['LawSearch']['law']
-                if not isinstance(items, list): items = [items]
-                
-                # Find exact match
-                target_law = None
-                for i in items:
-                    if i.get('법령명한글', '').replace(' ', '') == law_name.replace(' ', ''):
-                        target_law = i
-                        break
-                
-                if not target_law and items:
-                    target_law = items[0] # Fallback
-                
-                if target_law:
-                    law_id = target_law.get('법령일련번호')
-                    
-                    # 2. Get Article
-                    art_text = get_statute_article_internal(law_id, art_no)
-                    output.append(art_text)
-                else:
-                    output.append(f"Could not find law ID for '{law_name}'.")
-            else:
-                output.append(f"Law '{law_name}' not found.")
-                
+                 items = search_res['LawSearch']['law']
+                 if not isinstance(items, list): items = [items]
+                 target_law = items[0] # Best guess
+                 
+                 ext_id = target_law.get('법령일련번호')
+                 art_text = get_statute_article_internal(ext_id, art_no)
+                 output.append(f"### [External] {law_name} Article {art_no}\n{art_text}")
+                 resolved_count += 1
         except Exception as e:
-            output.append(f"Error resolving: {e}")
-            
-        output.append("---")
+             logger.error(f"External ref error: {e}")
+
+    if not output:
+        return ""
         
+    final_output = ["## Referenced Articles"] + output
+    return "\n\n".join(final_output)
+
+def resolve_delegation(content: str, context_law_name: str, context_law_id: str, current_article_no: str) -> str:
+    """
+    If content mentions "Presidential Decree" (대통령령), find the corresponding Enforcement Decree article.
+    Strategy:
+    1. Identify target decree name: "X Act" -> "X Act Enforcement Decree"
+    2. Search/Fetch that Decree.
+    3. Look for articles in that Decree that reference "Act Article {current_article_no}"
+       (e.g. "Pursuant to Article 20 of the Act")
+    """
+    if "대통령령" not in content and "국회규칙" not in content and "대법원규칙" not in content:
+        return ""
+        
+    logger.info(f"Checking delegations for {context_law_name} Art {current_article_no}")
+    
+    # 1. Guess Decree Name
+    # Usually: Law Name + " 시행령" (Enforcement Decree)
+    # Caution: Some laws just change "Act" to "Act Enforcement Decree"
+    # But appending " 시행령" is safe for search smarts usually
+    target_decree_name = context_law_name + " 시행령"
+    
+    # 2. Find Decree ID
+    deg_id = None
+    try:
+        data = client.search_law(target_decree_name)
+        if 'LawSearch' in data and 'law' in data['LawSearch']:
+            items = data['LawSearch']['law']
+            if not isinstance(items, list): items = [items]
+            # Precise match preferred
+            for item in items:
+                if item.get('법령명한글', '').replace(' ', '') == target_decree_name.replace(' ', ''):
+                    deg_id = item.get('법령일련번호')
+                    break
+            if not deg_id and items: deg_id = items[0].get('법령일련번호')
+    except Exception as e:
+        logger.error(f"Delegation search error: {e}")
+        return ""
+        
+    if not deg_id: return ""
+    
+    # 3. Scan Decree for Back-References
+    # "법 제X조" where X is current_article_no
+    target_ref_pattern = f"법 제{current_article_no}조"
+    
+    # We fetch ALL articles of the decree to scan them. 
+    # This might be heavy if decree is huge, but necessary for accurate linking.
+    decree_detail = client.get_law_detail(deg_id)
+    if '법령' not in decree_detail: return ""
+    
+    decree_info = decree_detail['법령']
+    real_decree_name = decree_info.get('기본정보', {}).get('법령명_한글', target_decree_name)
+    parsed = _parse_articles(decree_info)
+    
+    matches = []
+    for art in parsed:
+        if target_ref_pattern in art['full_text']:
+            matches.append(art)
+            
+    if not matches:
+        return f"\n\n## Delegated Legislation ({real_decree_name})\n(No specific article found referencing Act Article {current_article_no}.)"
+        
+    output = [f"\n\n## Delegated Legislation ({real_decree_name})"]
+    for m in matches:
+        output.append(f"### Article {m['no']} ({m['title']})")
+        output.append(m['full_text'])
+    
     return "\n".join(output)
 
 def search_integrated_internal(query: str) -> str:
