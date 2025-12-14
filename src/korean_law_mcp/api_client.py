@@ -130,6 +130,80 @@ class KoreanLawClient:
         
         return xmltodict.parse(response.content)
 
+    def get_legal_term_list(self, query: str) -> Dict[str, Any]:
+        """
+        Search for legal terms (Law Terms).
+        """
+        # Endpoint: /DRF/lawSearch.do?target=lstrm&query={query}
+        url = f"{self.BASE_URL}/DRF/lawSearch.do"
+        params = {
+            "OC": self.user_id,
+            "target": "lstrm",
+            "type": "XML",
+            "query": query
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
+    def get_legal_term_detail(self, term_id: str) -> Dict[str, Any]:
+        """
+        Get details of a legal term.
+        """
+        # Endpoint: /DRF/lawService.do?target=lstrm&MST={term_id} (or ID?)
+        # Guide says ID or MST. Usually MST for terms.
+        url = f"{self.BASE_URL}/DRF/lawService.do"
+        params = {
+            "OC": self.user_id,
+            "target": "lstrm",
+            "type": "XML",
+            "MST": term_id # Verified in docs: Uses MST
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
+    def get_statutory_interpretation_list(self, query: str) -> Dict[str, Any]:
+        """
+        Search for statutory interpretations (expc).
+        """
+        # Endpoint: /DRF/lawSearch.do?target=expc&query={query}
+        url = f"{self.BASE_URL}/DRF/lawSearch.do"
+        params = {
+            "OC": self.user_id,
+            "target": "expc",
+            "type": "XML",
+            "query": query
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
+    def get_statutory_interpretation_detail(self, interp_id: str) -> Dict[str, Any]:
+        """
+        Get details of a statutory interpretation.
+        """
+        # Endpoint: /DRF/lawService.do?target=expc&ID={interp_id}
+        url = f"{self.BASE_URL}/DRF/lawService.do"
+        params = {
+            "OC": self.user_id,
+            "target": "expc",
+            "type": "XML",
+            "ID": interp_id # Verified in docs: Uses ID (sometimes MST, will try ID first)
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
+
 if __name__ == "__main__":
     # Test connection
     try:
@@ -149,6 +223,33 @@ if __name__ == "__main__":
                 print(f"Found 1 law: {laws.get('법령명한글')}")
         else:
             print("Response structure unexpected:", result.keys())
-            
+
+        # Test Legal Term Search
+        print("\nTesting get_legal_term_list('근로자')...")
+        term_res = client.get_legal_term_list("근로자")
+        if 'LawTermSearch' in term_res and 'lawTerm' in term_res['LawTermSearch']:
+            items = term_res['LawTermSearch']['lawTerm']
+            if not isinstance(items, list): items = [items]
+            print(f"Found {len(items)} terms. First: {items[0].get('법령용어명')}")
+        else:
+            print("Term search failed/empty.")
+
+        # Test Statutory Interpretation Search
+        print("\nTesting get_statutory_interpretation_list('학교폭력')...")
+        interp_res = client.get_statutory_interpretation_list("학교폭력")
+        if 'Expc' in interp_res and 'expc' in interp_res['Expc']:
+            items = interp_res['Expc']['expc']
+            # items can be a single dict or list
+            if not isinstance(items, list): items = [items]
+            print(f"Found {len(items)} interpretations. First: {items[0].get('안건명')}")
+        elif 'ExpcSearch' in interp_res:
+             # Fallback just in case
+            print("Found ExpcSearch (unexpected but handled)")
+        else:
+            print("Interpretation search failed/empty. Raw keys:", interp_res.keys())
+
+
+
     except Exception as e:
         print(f"Test failed: {e}")
+

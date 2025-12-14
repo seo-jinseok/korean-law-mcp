@@ -39,6 +39,19 @@ def read_admrul_resource(id: str) -> str:
     logger.info(f"Reading admin rule resource: {id}")
     return get_admin_rule_detail_internal(id)
 
+@mcp.resource("law://term/{id}")
+def read_legal_term_resource(id: str) -> str:
+    """Read definition of a legal term"""
+    logger.info(f"Reading legal term resource: {id}")
+    return get_legal_term_detail_internal(id)
+
+@mcp.resource("law://interp/{id}")
+def read_interp_resource(id: str) -> str:
+    """Read content of a statutory interpretation"""
+    logger.info(f"Reading statutory interpretation resource: {id}")
+    return get_statutory_interpretation_detail_internal(id)
+
+
 
 # --- Prompts ---
 @mcp.prompt()
@@ -207,6 +220,113 @@ def search_law_articles(law_id: str, keywords: str) -> str:
     return "\n".join(output)
 
 @mcp.tool()
+def search_legal_terms(query: str) -> str:
+    """
+    Search for legal terms (definitions).
+    Returns a list of matching terms with IDs.
+    """
+    logger.info(f"Searching legal terms: {query}")
+    data = client.get_legal_term_list(query)
+    
+    if 'LawTermSearch' not in data or 'lawTerm' not in data['LawTermSearch']:
+        return "No legal terms found."
+        
+    items = data['LawTermSearch']['lawTerm']
+    if not isinstance(items, list): items = [items]
+    
+    output = [f"# Legal Term Search Results for '{query}'", ""]
+    for item in items:
+        name = item.get('법령용어명', 'Unknown')
+        id = item.get('법령용어일련번호', '') # MST ID
+        desc = item.get('법령용어내용', '') # Brief
+        source = item.get('출처법령명', '')
+        output.append(f"- **{name}** (Source: {source}) [ID: term:{id}]")
+        
+    return "\n".join(output)
+
+@mcp.tool()
+def search_statutory_interpretations(query: str) -> str:
+    """
+    Search for statutory interpretations (authoritative interpretations by Ministry of Government Legislation).
+    """
+    logger.info(f"Searching interpretations: {query}")
+    data = client.get_statutory_interpretation_list(query)
+    
+    if 'Expc' not in data or 'expc' not in data['Expc']:
+        return "No interpretations found."
+        
+    items = data['Expc']['expc']
+    if not isinstance(items, list): items = [items]
+    
+    output = [f"# Statutory Interpretation Search Results for '{query}'", ""]
+    for item in items:
+        title = item.get('안건명', 'Unknown')
+        no = item.get('안건번호', '')
+        date = item.get('회신일자', '')
+        id = item.get('법령해석일련번호', '')
+        output.append(f"- **{title}** (No: {no}, Date: {date}) [ID: interp:{id}]")
+        
+    return "\n".join(output)
+
+@mcp.tool()
+def get_statute_attachments(law_id: str) -> str:
+    """
+    Get a list of attached forms and tables (별표/서식) for a specific statute.
+    Args:
+        law_id: The ID of the law (e.g. "12345" or "statute:12345")
+    """
+    if ":" in law_id: law_id = law_id.split(":")[-1]
+    logger.info(f"Getting attachments for law: {law_id}")
+    
+    data = client.get_law_detail(law_id)
+    if '법령' not in data: return "Error: Law not found."
+    
+    law_info = data['법령']
+    name = law_info.get('기본정보', {}).get('법령명_한글', 'Unknown')
+    
+    # Parse images/files (Byulpyo / Seosik)
+    attachments = []
+    
+    # 1. Check for '별표' (Tables/Appendices) usually in separate section or inline
+    # Structure varies: '별표' list
+    if '별표' in law_info:
+        items = law_info['별표']
+        if not isinstance(items, list): items = [items]
+        for item in items:
+            # item keys: 별표번호, 별표제목, 별표이미지, 별표서식파일링크 etc.
+            # actually we need to check the actual keys.
+            # Usually: '별표번호', '별표설명', '별표이미지URL', '별표HWP파일명' ...
+            no = item.get('별표번호', '')
+            title = item.get('별표제목', '')
+            # Try to find a link. Usually '별표서식파일링크' or construct open.law.go.kr URL
+            # The API usually returns '별표이미지' (Image URL) or '링크'
+            # Let's just list what we have.
+            # The XML often has `LINK` or `FILE_LINK`.
+            # We'll dump a summary line.
+            attachments.append(f"[별표 {no}] {title}")
+            
+    # 2. Check for '서식' (Forms)
+    if '서식' in law_info:
+        items = law_info['서식']
+        if not isinstance(items, list): items = [items]
+        for item in items:
+            no = item.get('서식번호', '')
+            title = item.get('서식제목', '')
+            attachments.append(f"[서식 {no}] {title}")
+
+    if not attachments:
+        return f"# {name}\n\nNo attached forms or tables found."
+        
+    output = [f"# {name} - Attached Files", ""]
+    output.extend(attachments)
+    output.append("")
+    output.append("Note: Direct file downloads are not yet supported via text response,")
+    output.append("but these exist in the official record.")
+    
+    return "\n".join(output)
+
+
+@mcp.tool()
 def read_legal_resource(resource_id: str) -> str:
     """
     Reads the full content of a specific legal resource using its Typed ID.
@@ -248,6 +368,12 @@ def read_legal_resource(resource_id: str) -> str:
             
         elif r_type == "ordin":
             content = get_autonomous_law_detail_internal(r_id)
+            
+        elif r_type == "term":
+            content = get_legal_term_detail_internal(r_id)
+            
+        elif r_type == "interp":
+            content = get_statutory_interpretation_detail_internal(r_id)
             
         else:
             return f"Error: Unknown resource type '{r_type}'."
@@ -492,6 +618,62 @@ def get_autonomous_law_detail_internal(law_id: str) -> str:
                     if p_content: articles.append(f"  {p_no}. {p_content}")
     if not articles: articles.append("(No parsed articles found. The law might use a different structure or be empty.)")
     return f"# {name} ({gov})\n\n" + "\n".join(articles)
+
+def get_legal_term_detail_internal(term_id: str) -> str:
+    logger.info(f"Getting legal term details for ID: {term_id}")
+    data = client.get_legal_term_detail(term_id)
+    
+    if 'LawTermService' not in data: return "Error: Law Term not found."
+    
+    info = data['LawTermService']
+    name = info.get('법령용어명', 'Unknown')
+    desc = info.get('법령용어내용', '') # Definition
+    source = info.get('출처법령명', '')
+    
+    # Search metadata like which article defines it
+    article_ref = info.get('용어정의조문', '') # Sometimes present
+    
+    return f"# {name}\n\n**Source:** {source}\n**Ref:** {article_ref}\n\n## Definition\n{desc}"
+
+def get_statutory_interpretation_detail_internal(interp_id: str) -> str:
+    logger.info(f"Getting interpretation details for ID: {interp_id}")
+    data = client.get_statutory_interpretation_detail(interp_id)
+    
+    if 'ExpcService' not in data: return "Error: Interpretation not found."
+    
+    info = data['ExpcService']
+    title = info.get('안건명', 'Unknown')
+    no = info.get('안건번호', '')
+    date = info.get('회신일자', '')
+    
+    # Content fields
+    question = info.get('질의요지', '')
+    answer = info.get('회답', '')
+    reason = info.get('이유', '')
+    
+    def clean_html(text):
+        if not text: return ""
+        text = str(text)
+        text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
+        return text.strip()
+
+    output = [
+        f"# {title}",
+        f"**Case No:** {no}",
+        f"**Date:** {date}",
+        "",
+        "## 질의요지 (Question)",
+        clean_html(question),
+        "",
+        "## 회답 (Answer)",
+        clean_html(answer),
+        "",
+        "## 이유 (Reasoning)",
+        clean_html(reason)
+    ]
+    
+    return "\n".join(output)
+
 
 def _parse_articles(law_info: dict) -> list[dict]:
     """
