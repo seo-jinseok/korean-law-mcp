@@ -120,6 +120,7 @@ def search_korean_law(query: str) -> str:
     Usage Tips:
     - ALWAYS try to be specific if you know the law name and article number.
     - If searching for a case by number, just enter it (e.g., "2010다102991").
+    - **NEW:** To find specific articles containing keywords (e.g., "credits" in "Higher Education Act"), first search for the law to get its ID, then use `search_law_articles(law_id, "keywords")`.
     """
     # 0. English to Korean Mapping for major laws
     ENGLISH_LAW_MAPPING = {
@@ -152,6 +153,58 @@ def search_korean_law(query: str) -> str:
     
     # 2. Otherwise default to integrated search
     return search_integrated_internal(query)
+
+@mcp.tool()
+def search_law_articles(law_id: str, keywords: str) -> str:
+    """
+    Search for specific keywords within the articles of a statute.
+    
+    Args:
+        law_id: The ID of the law (e.g., "statute:12345" or just "12345").
+        keywords: Space-separated keywords to search for within article text.
+        
+    Returns:
+        Markdown formatted text containing the articles that match the keywords.
+    """
+    # Remove prefix if present
+    if ":" in law_id:
+        law_id = law_id.split(":")[-1]
+        
+    logger.info(f"Searching articles in law {law_id} for: {keywords}")
+    
+    data = client.get_law_detail(law_id)
+    if '법령' not in data: 
+        return "Error: Law not found or invalid ID."
+        
+    law_info = data['법령']
+    law_name = law_info.get('기본정보', {}).get('법령명_한글', 'Unknown')
+    parsed_articles = _parse_articles(law_info)
+    
+    if not parsed_articles: 
+        return f"# {law_name}\n\n(No articles found to search)"
+    
+    matches = []
+    keywords_list = keywords.split()
+    
+    for art in parsed_articles:
+        # Check if all keywords are in the article text
+        # Simple case-insensitive match
+        text_to_search = art['full_text']
+        if all(k in text_to_search for k in keywords_list):
+            matches.append(art)
+            
+    if not matches:
+        return f"# {law_name}\n\nNo articles found matching keywords: '{keywords}'"
+        
+    output = [f"# {law_name} - Search Results for '{keywords}'", ""]
+    output.append(f"Found {len(matches)} matching articles.\n")
+    
+    for art in matches:
+        output.append(f"## 제{art['no']}조 {art['title'] if art['title'] else ''}")
+        output.append(art['full_text'])
+        output.append("")
+        
+    return "\n".join(output)
 
 @mcp.tool()
 def read_legal_resource(resource_id: str) -> str:
