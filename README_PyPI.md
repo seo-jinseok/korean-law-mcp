@@ -102,7 +102,6 @@ korean-law-mcp
 > **문의 및 기여**: 버그 제보나 기능 제안은 [GitHub Issues](https://github.com/seo-jinseok/korean-law-mcp/issues)에 남겨주세요.
 
 
-
 ---
 
 > **GitHub 저장소**: 더 자세한 정보나 소스 코드는 [GitHub](https://github.com/seo-jinseok/korean-law-mcp)에서 확인하세요.
