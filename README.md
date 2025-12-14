@@ -52,6 +52,21 @@ korean-law-mcp
 # uv가 설치되어 있어야 합니다.
 ```
 
+### 4. Agentic Prompts (Workflows) 🧠
+Pre-defined templates for complex legal tasks.
+
+- **`summarize_law`**
+  - **Input**: Law ID (e.g., `265307`)
+  - **Action**: Fetches full text and asks for a structured summary (key provisions, purpose).
+- **`explain_legal_term`**
+  - **Input**: Term (e.g., "선의의 제3자")
+  - **Action**: Searches relevant laws/cases and explains the term's context.
+- **`compare_laws`**
+  - **Input**: Law ID 1, Law ID 2
+  - **Action**: Fetches both and asks for a comparative analysis.
+
+### 5. Client Usage (Claude Desktop etc.)
+Configure your client to use `uv run korean-law-mcp`.
 **Claude Desktop Config (`claude_desktop_config.json`) 예시**:
 
 ```json
