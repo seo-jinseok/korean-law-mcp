@@ -1,76 +1,86 @@
-# Korean Law MCP Server (대한민국 법령/판례 검색 MCP 서버)
+# ⚖️ 대한민국 법령/판례 검색기 (Korean Law MCP)
 
-이 프로젝트는 국가법령정보센터(Open API)를 활용하여 대한민국 법령, 판례, 헌재결정례, 행정규칙, 자치법규를 검색하고 상세 내용을 조회할 수 있는 **MCP (Model Context Protocol) 서버**입니다.
+**"법률 정보를 누구나 쉽게."**
 
-## 🚀 주요 기능
+이 프로그램은 복잡한 대한민국 법령과 판례를 **채팅하듯이 쉽게 검색하고 찾아볼 수 있게 해주는 도구**입니다. Claude와 같은 AI와 연결하여 사용할 수 있습니다.
 
-- **법령 (Statutes)**: 현행 법령 검색 및 조문 조회
-- **판례 (Precedents)**: 대법원 및 각급 법원 판례 검색 및 판시사항, 판결요지 조회
-- **헌재결정례 (Constitutional Court Decisions)**: 헌법재판소 결정례 검색 및 전문 조회
-- **자치법규 (Autonomous Laws)**: 각 지자체 조례/규칙 검색 및 조문 조회
-- **행정규칙 (Administrative Rules)**: 중앙행정기관 훈령/예규/고시 검색 및 내용 조회
+---
 
-## 🚀 빠른 시작 (Quick Start)
+## 🚀 시작하기 (Quick Start)
 
-이 패키지는 `uvx`를 사용하여 설치 없이 즉시 실행할 수 있습니다.
+가장 쉬운 사용 방법을 안내해 드립니다.
+
+### 방법 1: AI 모델에서 바로 실행 (추천)
+컴퓨터에 `uv`가 설치되어 있다면, 설치 과정 없이 아래 명령어 한 줄로 즉시 실행할 수 있습니다.
 
 ```bash
 uvx korean-law-mcp
 ```
 
-또는 `pip`로 설치할 수 있습니다:
+### 방법 2: 윈도우 실행 파일 (설치 불필요)
+복잡한 설정이 어려운 **윈도우(Windows) 사용자**를 위한 방법입니다.
 
-```bash
-pip install korean-law-mcp
-```
-
-### 필수 조건
-* **국가법령정보센터 Open API ID**가 필요합니다. ([회원가입 및 신청](https://www.law.go.kr/))
-* 실행 시 환경 변수 `OPEN_LAW_ID`를 설정해야 합니다.
-
-## 📚 제공 도구 (Tools)
-
-이 서버는 다음과 같은 MCP 도구를 제공합니다.
-
-| 도구 이름 (Tool) | 설명 (Description) | 인자 (Arguments) |
-|---|---|---|
-| `search_korean_law` | 통합 법률 검색 도구입니다. 상황에 따라 스마트하게 동작합니다.<br>1. **특정 조문 검색**: "고등교육법 제20조" -> 해당 조문의 전문을 즉시 반환합니다.<br>2. **통합 검색**: "학교폭력" -> 법령, 판례, 행정규칙을 아우르는 검색 결과를 요약하여 반환합니다. | `query`: 검색어 또는 찾고 싶은 법령/조문명 |
-| `read_legal_resource` | 법적 리소스(법령 전체, 판례 전문 등)의 상세 내용을 읽어옵니다. 검색 결과에서 확인한 **Typed ID**를 사용합니다.<br>자동으로 리소스 내의 타 법령 참조(예: "제5조 참조")를 감지하여 함께 보여줍니다. | `resource_id`: 리소스 ID (예: `statute:12345`, `prec:67890`) |
-
-- **한영 자동 변환**: "Civil Act Article 103"와 같이 영문으로 검색해도 자동으로 "민법 제103조"로 변환하여 검색합니다. (지원: Civil Act, Criminal Act, Commercial Act 등 주요 법령)
-
-### Typed ID 시스템 참고
-이 서버는 리소스를 고유하게 식별하기 위해 `type:id` 포맷을 사용합니다.
-- `statute:12345`: 법령 (Statutes)
-- `prec:67890`: 판례 (Precedents)
-- `admrul:54321`: 행정규칙 (Administrative Rules)
-- `const:...`: 헌재결정례
-- `ordin:...`: 자치법규
-
-또는 `pipx`를 사용하는 경우:
-```bash
-pipx run korean-law-mcp
-```
-
-또는 직접 Python으로 실행할 경우:
+1. [다운로드 페이지(Releases)](https://github.com/seo-jinseok/korean-law-mcp/releases)로 이동합니다.
+2. 최신 버전의 **`korean-law-mcp.exe`** 파일을 다운로드합니다.
+3. 다운로드한 파일의 경로를 복사해 둡니다. (예: `C:\Users\홍길동\Downloads\korean-law-mcp.exe`)
+4. Claude Desktop 설정 파일(`claude_desktop_config.json`)을 열고 아래와 같이 적어주세요.
 
 ```json
 {
   "mcpServers": {
     "korean-law": {
-      "command": "python3",
-      "args": [
-        "/absolute/path/to/korean-law-mcp/src/main.py"
-      ],
+      "command": "C:\\Users\\홍길동\\Downloads\\korean-law-mcp.exe",
       "env": {
-        "OPEN_LAW_ID": "your_actual_api_id"
+        "OPEN_LAW_ID": "여기에_아이디를_넣으세요"
       }
     }
   }
 }
 ```
 
+---
+
+## 🔑 필수 준비물: API 아이디
+이 프로그램을 사용하려면 **국가법령정보센터 아이디**가 꼭 필요합니다.
+
+1. [국가법령정보센터(law.go.kr)](https://www.law.go.kr/)에 접속하여 회원가입을 합니다.
+2. [Open API 신청 페이지](https://www.law.go.kr/)에서 '사용 신청'을 합니다. (무료입니다)
+3. 발급받은 아이디를 설정 파일의 `"OPEN_LAW_ID"` 부분에 넣어주세요.
 
 ---
 
-> **개발자 정보**: 소스 코드 확인 및 기여는 [GitHub 저장소](https://github.com/seo-jinseok/korean-law-mcp)를 참고하세요.
+## ✨ 주요 기능
+이 도구로 할 수 있는 것들입니다.
+
+*   **🔍 법령 검색**: "고등교육법 제20조 찾아줘"라고 물어보면 법 조항을 바로 보여줍니다.
+*   **⚖️ 판례 찾기**: "학교폭력 관련 대법원 판례 찾아줘"라고 하면 관련 판례를 요약해 줍니다.
+*   **📜 행정규칙/자치법규**: 훈령, 예규, 지자체 조례까지 모두 검색 가능합니다.
+*   **🤖 스마트 검색**: 법령 이름을 정확히 몰라도, "김영란법"처럼 흔히 부르는 이름으로 검색해도 알아서 찾아줍니다.
+
+---
+
+## 👩‍💻 개발자용 (고급)
+
+Python 환경에서 개발하거나 직접 설치하고 싶으신 분들을 위한 안내입니다.
+
+### 설치
+```bash
+pip install korean-law-mcp
+```
+
+### 실행
+```bash
+# 환경 변수 설정 후 실행
+export OPEN_LAW_ID=your_id
+korean-law-mcp
+```
+
+---
+
+> **문의 및 기여**: 버그 제보나 기능 제안은 [GitHub Issues](https://github.com/seo-jinseok/korean-law-mcp/issues)에 남겨주세요.
+
+
+
+---
+
+> **GitHub 저장소**: 더 자세한 정보나 소스 코드는 [GitHub](https://github.com/seo-jinseok/korean-law-mcp)에서 확인하세요.

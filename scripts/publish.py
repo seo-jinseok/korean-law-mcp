@@ -20,54 +20,23 @@ def sync_readmes(dry_run=False):
     print(">>> Syncing README.md to README_PyPI.md...")
     readme = read_file("README.md")
     
-    # Transformation Logic
-    lines = readme.split('\n')
-    new_lines = []
+    # Since the new README is designed to be compatible with both GitHub and PyPI,
+    # we can just copy it. We might want to append development info.
     
-    skip_mode = False
+    new_lines = []
+    lines = readme.split('\n')
     
     for line in lines:
-        # Stop skipping if we hit the next section
-        if skip_mode and line.startswith("## "):
-            skip_mode = False
-            
-        # 1. Transform Installation to Quick Start
-        if "## 🛠️ 설치 및 설정" in line:
-            new_lines.append("## 🚀 빠른 시작 (Quick Start)")
-            new_lines.append("")
-            new_lines.append("이 패키지는 `uvx`를 사용하여 설치 없이 즉시 실행할 수 있습니다.")
-            new_lines.append("")
-            new_lines.append("```bash")
-            new_lines.append("uvx korean-law-mcp")
-            new_lines.append("```")
-            new_lines.append("")
-            new_lines.append("또는 `pip`로 설치할 수 있습니다:")
-            new_lines.append("")
-            new_lines.append("```bash")
-            new_lines.append("pip install korean-law-mcp")
-            new_lines.append("```")
-            new_lines.append("")
-            new_lines.append("### 필수 조건")
-            new_lines.append("* **국가법령정보센터 Open API ID**가 필요합니다. ([회원가입 및 신청](https://www.law.go.kr/))")
-            new_lines.append("* 실행 시 환경 변수 `OPEN_LAW_ID`를 설정해야 합니다.")
-            new_lines.append("")
-            skip_mode = True # Skip the original installation section
-            continue
-            
-        # 2. Skip "배포 및 쉬운 사용 방법" as it's redundant for PyPI
-        if "## 📦 배포 및 쉬운 사용 방법" in line:
-            skip_mode = True
-            continue
+        new_lines.append(line)
 
-        # 3. Add link to GitHub at the end
-        if not skip_mode:
-            new_lines.append(line)
-
-    # Append Developer Info
+    # Append Developer Info for PyPI specifically if needed, or keeping it identical is also fine.
+    # The new README already has a "Developer" section. 
+    # Let's add a small note at the bottom for PyPI users to find the repo.
+    
     new_lines.append("")
     new_lines.append("---")
     new_lines.append("")
-    new_lines.append("> **개발자 정보**: 소스 코드 확인 및 기여는 [GitHub 저장소](https://github.com/seo-jinseok/korean-law-mcp)를 참고하세요.")
+    new_lines.append("> **GitHub 저장소**: 더 자세한 정보나 소스 코드는 [GitHub](https://github.com/seo-jinseok/korean-law-mcp)에서 확인하세요.")
 
     content = "\n".join(new_lines).strip() + "\n"
     
