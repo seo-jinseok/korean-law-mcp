@@ -300,6 +300,10 @@ def get_precedent_detail_internal(prec_id: str) -> str:
     content = info.get('판례내용', '')
     holding = info.get('판시사항', '')
     
+    # --- Knowledge Graph: Relationships ---
+    ref_articles = info.get('참조조문', '')
+    ref_cases = info.get('참조판례', '')
+
     def clean_html(text):
         if not text: return ""
         text = text.replace("<br/>", "\n").replace("&lt;", "<").replace("&gt;", ">")
@@ -310,6 +314,7 @@ def get_precedent_detail_internal(prec_id: str) -> str:
         f"**Case No:** {case_no}",
         f"**Court:** {court}",
         f"**Date:** {date}",
+        f"**ID:** {prec_id}",
         "",
         "## 판시사항 (Holding)",
         clean_html(holding),
@@ -317,9 +322,19 @@ def get_precedent_detail_internal(prec_id: str) -> str:
         "## 판결요지 (Summary)",
         clean_html(summary),
         "",
-        "## 판례내용 (Full Text)",
+        "## 전문 (Full Text)",
         clean_html(content)
     ]
+    
+    # Append Knowledge Graph Links
+    if ref_articles or ref_cases:
+        output.append("")
+        output.append("## 참조 정보 (Related Resources)")
+        if ref_articles:
+            output.append(f"### 참조 조문 (Referenced Articles)\n{clean_html(ref_articles)}")
+        if ref_cases:
+            output.append(f"### 참조 판례 (Referenced Cases)\n{clean_html(ref_cases)}")
+            
     return "\n".join(output)
 
 def get_admin_rule_detail_internal(adm_id: str) -> str:
@@ -365,8 +380,8 @@ def get_prec_const_detail_internal(detc_id: str) -> str:
     date = info.get('종국일자', 'Unknown')
     type_name = info.get('사건종류명', '')
     holding = info.get('판시사항', '')
-    summary = info.get('결정요지', '')
-    content = info.get('전문', '')
+    summary = info.get('결정요지', '') # Constitutional Court uses 결정요지
+    content = info.get('전문', '') # Constitutional Court uses 전문
     
     def clean_html(text):
         if not text: return ""
