@@ -64,8 +64,15 @@ Pre-defined templates for complex legal tasks.
 - **`compare_laws`**
   - **Input**: Law ID 1, Law ID 2
   - **Action**: Fetches both and asks for a comparative analysis.
+  
+### 5. Knowledge Graph (Relationships) 🕸️
+When viewing a Precedent (판례), related resources are automatically linked:
+- **Referenced Articles (참조조문)**: The specific laws cited by the court.
+- **Referenced Cases (참조판례)**: Other judicial precedents cited in the judgment.
 
-### 5. Client Usage (Claude Desktop etc.)
+These appear as a structured list at the bottom of the resource output, allowing easy navigation.
+
+### 6. Client Usage (Claude Desktop etc.)
 Configure your client to use `uv run korean-law-mcp`.
 **Claude Desktop Config (`claude_desktop_config.json`) 예시**:
 
