@@ -1,6 +1,6 @@
 [project]
 name = "korean-law-mcp"
-version = "0.2.8"
+version = "0.2.9"
 description = "MCP Server for Korean Law Open API"
 dependencies = [
     "mcp[cli]>=0.1.0",

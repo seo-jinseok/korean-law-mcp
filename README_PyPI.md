@@ -10,15 +10,31 @@
 
 가장 쉬운 사용 방법을 안내해 드립니다.
 
-### 방법 1: AI 모델에서 바로 실행 (추천)
-컴퓨터에 `uv`가 설치되어 있다면, 설치 과정 없이 아래 명령어 한 줄로 즉시 실행할 수 있습니다.
+### 방법 1: `uv`를 이용한 자동 설치 (Mac/Linux/Windows 추천)
+`uv`가 설치되어 있다면 가장 간편한 방법입니다. Claude 설정 파일에 아래 내용을 추가하세요. (Python 등을 직접 설치할 필요가 없습니다)
 
-```bash
-uvx korean-law-mcp
+*   **설정 파일 경로**:
+    *   MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+    *   Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "korean-law": {
+      "command": "uvx",
+      "args": [
+        "korean-law-mcp"
+      ],
+      "env": {
+        "OPEN_LAW_ID": "여기에_아이디를_넣으세요"
+      }
+    }
+  }
+}
 ```
 
 ### 방법 2: 윈도우 실행 파일 (설치 불필요)
-복잡한 설정이 어려운 **윈도우(Windows) 사용자**를 위한 방법입니다.
+`uv`나 Python 설정이 어려운 **윈도우(Windows) 사용자**를 위한 방법입니다.
 
 1. [다운로드 페이지(Releases)](https://github.com/seo-jinseok/korean-law-mcp/releases)로 이동합니다.
 2. 최신 버전의 **`korean-law-mcp.exe`** 파일을 다운로드합니다.
