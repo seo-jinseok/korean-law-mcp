@@ -118,26 +118,6 @@ korean-law-mcp
 - `const:...`: 헌재결정례
 - `ordin:...`: 자치법규
 
-## 🖥️ 사용 방법 (Claude Desktop 예시)
-
-`claude_desktop_config.json` 파일에 다음과 같이 설정을 추가하여 사용할 수 있습니다.
-
-```json
-{
-  "mcpServers": {
-    "korean-law": {
-      "command": "uvx",
-      "args": [
-        "korean-law-mcp"
-      ],
-      "env": {
-        "OPEN_LAW_ID": "your_actual_api_id"
-      }
-    }
-  }
-}
-```
-
 또는 `pipx`를 사용하는 경우:
 ```bash
 pipx run korean-law-mcp
