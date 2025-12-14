@@ -5,7 +5,7 @@ import os
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
-from korean_law_mcp.main import read_statute_resource, read_statute_article_resource, read_precedent_resource
+from korean_law_mcp.resources import read_statute_resource, read_statute_article_resource, read_precedent_resource
 
 class TestResources(unittest.TestCase):
     def test_read_statute_resource(self):

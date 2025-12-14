@@ -5,7 +5,7 @@ import os
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
-from korean_law_mcp.main import summarize_law, explain_legal_term, compare_laws
+from korean_law_mcp.prompts import summarize_law, explain_legal_term, compare_laws
 
 class TestPrompts(unittest.TestCase):
     def test_summarize_law(self):

@@ -1,4 +1,4 @@
-from korean_law_mcp.main import search_korean_law, read_legal_resource
+from korean_law_mcp.tools import search_korean_law, read_legal_resource
 import re
 import sys
 
