@@ -34,24 +34,25 @@ def run_comprehensive_test():
         log_test("Read Admin Rule", "No admin rule found in search results", expected=False)
 
     # 2. Constitutional Court Decision
+    # 2. Constitutional Court Decision (via Precedent Search)
     print("\n--- Test 2: Const Court Decision (Search & Read) ---")
-    # "간통" (Adultery) is a famous constitutional court case topic
-    res = search_korean_law("간통")
-    # Searching for 'prec' or 'const' type ID in results. 
-    # Note: search_korean_law aggregates types. Const court decisions might come under 'prec' or distinct 'detc' if implemented?
-    # Our internal logic maps 'detc' -> 'prec' or similar? Let's check the output.
-    # The tool returns Typed IDs. If it returns `detc:` or `prec:` we can use it.
+    # Use a known stable Constitutional Court case that appears in 'prec' search.
+    # Case: 2003헌가1 (Customary Law / Capital Relocation)
+    res = search_korean_law("2003헌가1")
+    
     match = re.search(r'ID: ((?:prec|detc|const):\d+)', res)
+    
     if match:
         cid = match.group(1)
-        print(f"Found Const/Prec ID: {cid}")
+        print(f"Found Stable Const Case ID: {cid}")
         content = read_legal_resource(cid)
-        if "위헌" in content or "헌법" in content or len(content) > 100:
-             log_test("Read Const Court Decision", "Success")
+        # Check for keywords related to the case (Relocation of Capital / Customary Constitution)
+        if "관습헌법" in content or "수도" in content or len(content) > 100:
+             log_test("Read Const Court Decision (2003헌가1)", "Success")
         else:
-             log_test("Read Const Court Decision", content[:200], expected=False)
+             log_test("Read Const Court Decision (2003헌가1)", content[:200], expected=False)
     else:
-        log_test("Read Const Court Decision", "No suitable ID found", expected=False)
+        log_test("Read Const Court Decision", "Case 2003헌가1 not found in search", expected=False)
 
     # 3. Loosely Formatted Article Query
     print("\n--- Test 3: Loosely Formatted Query ('Civil Act 103') ---")

@@ -16,15 +16,23 @@ client = KoreanLawClient()
 @mcp.tool()
 def search_korean_law(query: str) -> str:
     """
-    Unified search tool for Korean Law including Statutes, Precedents, and Admin Rules.
-    
+    Primary interface for searching Korean laws, precedents, and administrative rules.
+    It is a "Smart Search" that adapts to the query type.
+
     Capabilities:
-    1. Smart Statute Lookup: "고등교육법 제20조" -> Directly returns the article content.
-    2. Broad Search: "학교폭력" -> Returns a summary of Statutes, Precedents, and Rules.
-    
-    Output Format:
-    - Provides summaries or specific content.
-    - Uses Typed IDs (e.g., `statute:12345`, `prec:56789`) for further reading.
+    1. **Specific Article Lookup** (Preferred):
+       - Input: "Civil Act Article 103", "민법 제103조", "Criminal Act 250"
+       - Behavior: Returns the *exact content* of the article directly. No need for further steps.
+       - Note: Supports both Korean ("민법") and major English names ("Civil Act").
+
+    2. **Broad Keyword Search**:
+       - Input: "school violence", "학교폭력", "adultery case"
+       - Behavior: Returns a summarized list of top results across Statutes, Precedents, and Admin Rules.
+       - Output: Includes **Typed IDs** (e.g., `statute:12345`, `prec:67890`) which MUST be used with `read_legal_resource` to get full text.
+
+    Usage Tips:
+    - ALWAYS try to be specific if you know the law name and article number.
+    - If searching for a case by number, just enter it (e.g., "2010다102991").
     """
     # 0. English to Korean Mapping for major laws
     ENGLISH_LAW_MAPPING = {
@@ -61,13 +69,20 @@ def search_korean_law(query: str) -> str:
 @mcp.tool()
 def read_legal_resource(resource_id: str) -> str:
     """
-    Read the full content of a legal resource using its Typed ID.
+    Reads the full content of a specific legal resource using its Typed ID.
     
     Args:
-        resource_id: A typed ID string (e.g., "statute:12345", "prec:67890", "admrul:54321").
-        
-    Returns:
-        Full content in Markdown, with resolved cross-references appended if applicable.
+        resource_id: A string strictly in the format `type:id` (e.g., "statute:12345", "prec:98765", "admrul:54321").
+                     The ID is obtained from the `search_korean_law` output.
+
+    Features:
+    - **Full Text Retrieval**: Fetches the complete text of statutes, precedents, or rules.
+    - **Reference Resolution**: Automatically detects references to other laws (e.g., "refer to Article 5") within the text
+      and appends their content to the response, saving you extra round-trips.
+    - **Robustness**: Automatically handles ID formatting issues or outdated IDs by trying fallbacks (ID -> MST -> Detc).
+
+    Return:
+    - Markdown formatted text containing the resource metadata, body content, and resolved references.
     """
     logger.info(f"Reading resource: {resource_id}")
     
@@ -569,8 +584,7 @@ def search_integrated_internal(query: str) -> str:
         futures = [
             executor.submit(search_target, "law", "Statutes"),
             executor.submit(search_target, "prec", "Precedents"),
-            executor.submit(search_target, "admrul", "AdminRules"),
-            executor.submit(search_target, "detc", "ConstCourt")
+            executor.submit(search_target, "admrul", "AdminRules")
         ]
         for future in concurrent.futures.as_completed(futures):
             label, res = future.result()
@@ -603,26 +617,9 @@ def search_integrated_internal(query: str) -> str:
             output.append(f"- **{case_no} {name}** [ID: prec:{id}]")
     else: output.append("(No results)")
     output.append("")
-    
-    consts = results.get("ConstCourt", {})
-    output.append("## 3. Const. Court (헌재결정례)")
-    if consts and 'DetcSearch' in consts and 'detc' in consts['DetcSearch']:
-        items = consts['DetcSearch']['detc']
-        if not isinstance(items, list): items = [items]
-        for item in items[:3]:
-            name = item.get('사건명', '')
-            case_no = item.get('사건번호', '')
-            id = item.get('헌재결정일련번호', '') # Check field name correctness? Usually '법령일련번호' equivalent.
-            # API usually returns 'ID' or specific field. Let's assume '헌재결정일련번호' or check debug keys if fail.
-            # Actually api_client uses 'ID' for retrieval. In search result it might be '헌재결정일련번호' or just '판례일련번호'? 
-            # Inspect targets.py had 'detc' test? 
-            # Standardizing: likely '헌재결정일련번호'. Safe bet: item.get('헌재결정일련번호')
-            output.append(f"- **{case_no} {name}** [ID: detc:{id}]")
-    else: output.append("(No results)")
-    output.append("")
 
     rules = results.get("AdminRules", {})
-    output.append("## 4. Administrative Rules (행정규칙)")
+    output.append("## 3. Administrative Rules (행정규칙)")
     if rules and 'AdmRulSearch' in rules and 'admrul' in rules['AdmRulSearch']:
         items = rules['AdmRulSearch']['admrul']
         if not isinstance(items, list): items = [items]
