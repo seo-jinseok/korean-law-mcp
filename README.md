@@ -1,5 +1,8 @@
 # ⚖️ 대한민국 법령/판례 검색기 (Korean Law MCP)
 
+[![MCP Badge](https://lobehub.com/badge/mcp/seo-jinseok-korean-law-mcp)](https://lobehub.com/mcp/seo-jinseok-korean-law-mcp)
+
+
 **"법률 정보를 누구나 쉽게."**
 
 이 프로그램은 복잡한 대한민국 법령과 판례를 **채팅하듯이 쉽게 검색하고 찾아볼 수 있게 해주는 도구**입니다. Claude와 같은 AI와 연결하여 사용할 수 있습니다.
@@ -97,4 +100,3 @@ korean-law-mcp
 ---
 
 > **문의 및 기여**: 버그 제보나 기능 제안은 [GitHub Issues](https://github.com/seo-jinseok/korean-law-mcp/issues)에 남겨주세요.
-
