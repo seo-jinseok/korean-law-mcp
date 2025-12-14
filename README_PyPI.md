@@ -39,7 +39,7 @@ pip install korean-law-mcp
 
 - **한영 자동 변환**: "Civil Act Article 103"와 같이 영문으로 검색해도 자동으로 "민법 제103조"로 변환하여 검색합니다. (지원: Civil Act, Criminal Act, Commercial Act 등 주요 법령)
 
-### Typed ID 시스템
+### Typed ID 시스템 참고
 이 서버는 리소스를 고유하게 식별하기 위해 `type:id` 포맷을 사용합니다.
 - `statute:12345`: 법령 (Statutes)
 - `prec:67890`: 판례 (Precedents)

@@ -52,29 +52,30 @@ korean-law-mcp
 # uv가 설치되어 있어야 합니다.
 ```
 
-### 4. Agentic Prompts (Workflows) 🧠
-Pre-defined templates for complex legal tasks.
+### 4. 에이전트 프롬프트 (워크플로우) 🧠
+복잡한 법률 작업을 수행하기 위한 사전 정의된 템플릿입니다.
 
 - **`summarize_law`**
-  - **Input**: Law ID (e.g., `265307`)
-  - **Action**: Fetches full text and asks for a structured summary (key provisions, purpose).
+  - **입력**: 법령 ID (예: `265307`)
+  - **기능**: 법령 전문을 조회한 후, 핵심 조항과 입법 취지 등을 요약 정리합니다.
 - **`explain_legal_term`**
-  - **Input**: Term (e.g., "선의의 제3자")
-  - **Action**: Searches relevant laws/cases and explains the term's context.
+  - **입력**: 법률 용어 (예: "선의의 제3자")
+  - **기능**: 관련 법령 및 판례를 검색하여 해당 용어의 법적 의미와 맥락을 설명합니다.
 - **`compare_laws`**
-  - **Input**: Law ID 1, Law ID 2
-  - **Action**: Fetches both and asks for a comparative analysis.
+  - **입력**: 법령 ID 1, 법령 ID 2
+  - **기능**: 두 법령(또는 조문)을 조회하여 차이점과 유사점을 비교 분석합니다.
   
-### 5. Knowledge Graph (Relationships) 🕸️
-When viewing a Precedent (판례), related resources are automatically linked:
-- **Referenced Articles (참조조문)**: The specific laws cited by the court.
-- **Referenced Cases (참조판례)**: Other judicial precedents cited in the judgment.
+### 5. 법률 지식 그래프 (관계망) 🕸️
+판례 조회 시, 관련된 법적 리소스가 자동으로 연결됩니다:
+- **참조 조문 (Referenced Articles)**: 판결에서 인용한 관련 법령 조항
+- **참조 판례 (Referenced Cases)**: 판결에서 인용한 다른 판례들
 
-These appear as a structured list at the bottom of the resource output, allowing easy navigation.
+이 정보는 리소스 조회 결과 하단에 구조화된 목록으로 표시되어, 관련된 법률 정보를 손쉽게 탐색할 수 있습니다.
 
-### 6. Client Usage (Claude Desktop etc.)
-Configure your client to use `uv run korean-law-mcp`.
-**Claude Desktop Config (`claude_desktop_config.json`) 예시**:
+### 6. 클라이언트 사용법 (Claude Desktop 등)
+클라이언트가 `uv run korean-law-mcp`를 실행하도록 설정합니다.
+
+**Claude Desktop 설정 (`claude_desktop_config.json`) 예시**:
 
 ```json
 {
@@ -132,7 +133,7 @@ korean-law-mcp
 
 - **한영 자동 변환**: "Civil Act Article 103"와 같이 영문으로 검색해도 자동으로 "민법 제103조"로 변환하여 검색합니다. (지원: Civil Act, Criminal Act, Commercial Act 등 주요 법령)
 
-### Typed ID 시스템
+### Typed ID 시스템 참고
 이 서버는 리소스를 고유하게 식별하기 위해 `type:id` 포맷을 사용합니다.
 - `statute:12345`: 법령 (Statutes)
 - `prec:67890`: 판례 (Precedents)
