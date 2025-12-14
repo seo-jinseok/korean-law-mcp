@@ -28,6 +28,32 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
+## Quick Start
+
+### Windows Users (No Installation Required)
+For users who do not have Python installed or prefer a simple setup:
+
+1.  Go to the [Releases](https://github.com/seo-jinseok/korean-law-mcp/releases) page.
+2.  Download the latest `korean-law-mcp.exe`.
+3.  Add the following to your Claude Desktop configuration file (`C:\Users\YourName\AppData\Roaming\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "korean-law": {
+      "command": "C:\\path\\to\\korean-law-mcp.exe",
+      "env": {
+        "OPEN_LAW_ID": "Your_Open_Law_ID"
+      }
+    }
+  }
+}
+```
+*(Make sure to replace `C:\\path\\to\\...` with the actual path where you downloaded the file)*
+
+### Developers / Python Users (pip)
+If you have Python installed:
+
 ### 3. 환경 변수 설정
 `.env` 파일을 생성하고 Open API ID를 설정해야 합니다. (또는 실행 시 환경변수로 주입)
 

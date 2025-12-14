@@ -96,10 +96,15 @@ def main():
     parser = argparse.ArgumentParser(description="Automate release process")
     parser.add_argument("--dry-run", action="store_true", help="Simulate actions without making changes")
     parser.add_argument("--skip-pypi", action="store_true", help="Skip PyPI publish step")
+    parser.add_argument("--prepare-only", action="store_true", help="Only sync READMEs, skip Git and Publish")
     args = parser.parse_args()
     
     # 1. Sync READMEs
     sync_readmes(dry_run=args.dry_run)
+    
+    if args.prepare_only:
+        print(">>> Prepare only mode. Exiting.")
+        return
     
     # 2. Git Operations
     run_command("git add README.md README_PyPI.md", dry_run=args.dry_run)
