@@ -10,27 +10,31 @@ The push will trigger the `.github/workflows/release_pipeline.yml` on GitHub, wh
 
 ### Steps
 
-1.  **Sync Documentation**: Ensure `README_PyPI.md` is up to date.
+1.  **Bump Version**: Increment the patch version in `pyproject.toml`.
+    ```bash
+    uv run python scripts/bump_version.py
+    ```
+
+2.  **Sync Documentation**: Ensure `README_PyPI.md` is up to date (this MUST happen after version bump so docs reflect new version if needed, though mostly for content).
     ```bash
     uv run python scripts/publish.py --prepare-only
     ```
 
-2.  **Git Add**: Stage all changes.
+3.  **Git Add**: Stage all changes (pyproject.toml + READMEs).
     ```bash
     git add .
     ```
 
-3.  **Git Commit**: Commit the changes.
-    - If you are just updating docs, use: `git commit -m "docs: update README"`
-    - If you are releasing a new version, use: `git commit -m "chore: release v(version)"`
+4.  **Git Commit**: Commit the changes.
     ```bash
-    git commit -m "chore: update documentation and prepare for deployment"
+    git commit -m "chore: bump version and update docs for release"
     ```
 
-4.  **Git Push**: Push to origin to trigger the pipeline.
+5.  **Git Push**: Push to origin to trigger the pipeline (which listens for pyproject.toml changes).
     // turbo
     ```bash
     git push origin main
     ```
+
 
 5.  **Completion**: The GitHub Actions will now take over. You can check the progress on the GitHub Actions tab.

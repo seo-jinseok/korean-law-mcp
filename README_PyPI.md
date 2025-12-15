@@ -138,10 +138,25 @@ pip install korean-law-mcp
 ```
 
 ### 실행
+### 실행 (MCP 서버 구동)
+
+이 패키지는 **MCP 서버**이므로, 터미널에서 직접 실행하면 사용자 입력(JSON-RPC)을 기다리는 상태가 됩니다. (아무런 출력이 없을 수 있습니다.)
+
+**Claude Desktop**이나 **MCP Client**에서 사용하도록 설정해야 합니다.
+개발 목적으로 로컬에서 테스트하려면 `mcp-cli` 등을 사용하거나, 소스 코드 내의 `inspector`를 활용하세요.
+
 ```bash
-# 환경 변수 설정 후 실행
-export OPEN_LAW_ID=your_id
-korean-law-mcp
+# Claude Desktop 설정 예시 (macOS)
+# ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "korean-law": {
+      "command": "uvx",
+      "args": ["korean-law-mcp"],
+      "env": { "OPEN_LAW_ID": "YOUR_ID" }
+    }
+  }
+}
 ```
 
 ---
