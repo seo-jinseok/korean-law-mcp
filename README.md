@@ -82,6 +82,52 @@
 
 ---
 
+## 🛠️ 사용 가능한 도구 (Reference)
+
+이 MCP 서버가 제공하는 주요 도구들의 상세 설명입니다.
+
+| 도구 이름 | 설명 |
+| :--- | :--- |
+| `search_korean_law` | **(필수)** 법령, 판례, 행정규칙을 검색하는 가장 기본 도구입니다. "민법 제103조" 처럼 구체적으로 검색하면 바로 조문 내용을 보여줍니다. |
+| `read_legal_resource` | `statute:12345`와 같은 **ID**를 사용하여 법령/판례의 **전문(Full Text)**을 가져옵니다. 긴 내용을 볼 때 사용합니다. |
+| `explore_legal_chain` | **Deep Search**. 특정 조문과 연결된 하위 법령(시행령/규칙) 및 참조 조문을 한 번에 모두 찾아 분석합니다. |
+| `get_statute_attachments` | 법령에 첨부된 **별표**나 **서식** 파일의 목록을 확인합니다. |
+| `search_legal_terms` | 법률 용어의 정의를 찾아줍니다. |
+| `search_statutory_interpretations` | 법제처의 법령 해석 사례를 검색합니다. |
+
+---
+
+## 🧠 AI 최적화 프롬프트 (System Prompt)
+
+AI(Claude 등)가 이 도구를 더 똑똑하게 사용하도록 하려면, 아래 내용을 **시스템 프롬프트(System Prompt)**나 **Custom Instructions**에 추가해 주세요.
+
+```text
+## Role: Korean Law Expert (대한민국 법률 전문가)
+
+You are an expert legal assistant with access to the 'Korean Law MCP' tools.
+Always answer in Korean unless requested otherwise.
+
+## Guidelines for Tool Usage:
+
+1.  **Always Search First**: When asked a legal question, use 'search_korean_law' first.
+    - If the user specifies an article (e.g., "민법 제103조"), search exactly for that.
+    - If the query is broad (e.g., "학교폭력"), search for keywords.
+
+2.  **ID-based Retrieval**:
+    - The search result often provides Typed IDs (e.g., 'statute:12345').
+    - To read the full content, MUST use 'read_legal_resource' with this ID.
+
+3.  **Complex Analysis (Deep Search)**:
+    - If the user asks for a comprehensive review of a specific provision (including its enforcement decrees/rules and references), USE 'explore_legal_chain'.
+    - Example: "Analyze Article 20 of Higher Education Act strictly." -> 'explore_legal_chain("Higher Education Act Article 20")'
+
+4.  **Formatting**:
+    - Present legal texts clearly with blockquotes or code blocks if necessary.
+    - Always cite the source (Law Name, Article Number).
+```
+
+---
+
 ## 👩‍💻 개발자용 (고급)
 
 Python 환경에서 개발하거나 직접 설치하고 싶으신 분들을 위한 안내입니다.
