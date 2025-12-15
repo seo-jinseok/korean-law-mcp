@@ -128,36 +128,30 @@ Always answer in Korean unless requested otherwise.
 
 ---
 
-## 👩‍💻 개발자용 (고급)
+## 👩‍💻 개발자 및 고급 사용자용 (Advanced)
 
-Python 환경에서 개발하거나 직접 설치하고 싶으신 분들을 위한 안내입니다.
+소스 코드를 직접 수정하거나, PyPI에서 직접 설치하여 사용하고 싶은 경우의 안내입니다.
 
-### 설치
+### 1. PyPI 설치 (pip)
+`uv` 없이 일반 Python 환경에서 설치하려면:
 ```bash
 pip install korean-law-mcp
 ```
+설치 후에는 `claude_desktop_config.json`에서 `command`를 `"python", "-m", "korean_law_mcp"` 등으로 설정하여 연결합니다.
 
-### 실행
-### 실행 (MCP 서버 구동)
-
-이 패키지는 **MCP 서버**이므로, 터미널에서 직접 실행하면 사용자 입력(JSON-RPC)을 기다리는 상태가 됩니다. (아무런 출력이 없을 수 있습니다.)
-
-**Claude Desktop**이나 **MCP Client**에서 사용하도록 설정해야 합니다.
-개발 목적으로 로컬에서 테스트하려면 `mcp-cli` 등을 사용하거나, 소스 코드 내의 `inspector`를 활용하세요.
+### 2. 로컬 개발 및 디버깅
+이 레포지토리를 클론하여 개발하는 경우:
 
 ```bash
-# Claude Desktop 설정 예시 (macOS)
-# ~/Library/Application Support/Claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "korean-law": {
-      "command": "uvx",
-      "args": ["korean-law-mcp"],
-      "env": { "OPEN_LAW_ID": "YOUR_ID" }
-    }
-  }
-}
+# 의존성 설치
+uv sync
+
+# 디버깅 (MCP Inspector 사용)
+npx @modelcontextprotocol/inspector uv run korean-law-mcp
 ```
+
+> **참고**: 이 프로그램은 단독 실행 시 아무런 반응이 없는 것이 정상입니다. (MCP 프로토콜 통신 대기 중)
+> 반드시 **MCP Inspector**나 **Claude Desktop**을 통해 실행하세요.
 
 ---
 
