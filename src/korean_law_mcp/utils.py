@@ -461,67 +461,56 @@ def get_law_history_internal(law_id: str, article_no: str = None) -> str:
 def get_old_new_comparison_internal(law_id: str) -> str:
     """
     Get the old/new article comparison (신구조문대비) for a law.
-    Shows what changed in the most recent amendment.
+    Since the lsOnC API is not available, we provide web links and amendment info.
     """
     logger.info(f"Getting old/new comparison for ID: {law_id}")
     
+    # Use the regular law detail API to get amendment info
     try:
-        data = client.get_old_new_comparison(law_id)
+        data = client.get_law_detail(law_id)
     except Exception as e:
-        logger.error(f"Error fetching old/new comparison: {e}")
-        return f"Error: Failed to fetch comparison. {e}"
+        logger.error(f"Error fetching law detail: {e}")
+        return f"Error: Failed to fetch law information. {e}"
     
-    # Try to find comparison data in response
-    comp_items = []
+    if '법령' not in data:
+        return "Error: Law not found."
     
-    # Common response structures
-    if '신구법령' in data:
-        root = data['신구법령']
-        items = root.get('신구조문', []) or root.get('조문', [])
-        if not isinstance(items, list):
-            items = [items]
-        comp_items = items
-    elif 'LsOnCService' in data:
-        root = data['LsOnCService']
-        items = root.get('항목', []) or root.get('item', [])
-        if not isinstance(items, list):
-            items = [items]
-        comp_items = items
-    elif 'LsOnc' in data:
-        root = data['LsOnc']
-        items = root.get('조문', []) or root.get('item', [])
-        if not isinstance(items, list):
-            items = [items]
-        comp_items = items
+    law_info = data['법령']
+    basic_info = law_info.get('기본정보', {})
     
-    if not comp_items:
-        return f"No comparison data found. Response keys: {list(data.keys())}"
+    law_name = basic_info.get('법령명_한글', 'Unknown')
+    enforcement_date = basic_info.get('시행일자', '')
+    revision_type = basic_info.get('제개정구분', '')
     
-    output = ["# 신구조문대비 (Old/New Comparison)", ""]
-    output.append("최근 개정에서 변경된 조문을 보여줍니다.\n")
+    output = [f"# {law_name} 신구조문대비", ""]
     
-    for item in comp_items[:15]:  # Limit to 15 items
-        art_no = item.get('조문번호', '') or item.get('조번호', '') or item.get('articleNo', '')
-        old_text = item.get('현행내용', '') or item.get('구법내용', '') or item.get('oldText', '')
-        new_text = item.get('개정내용', '') or item.get('신법내용', '') or item.get('newText', '')
-        
-        output.append(f"## 제{art_no}조")
-        output.append("")
-        output.append("### 📜 현행 (Old)")
-        output.append(f"```")
-        output.append(clean_html(old_text) if old_text else "(신설)")
-        output.append(f"```")
-        output.append("")
-        output.append("### ✨ 개정 (New)")
-        output.append(f"```")
-        output.append(clean_html(new_text) if new_text else "(삭제)")
-        output.append(f"```")
-        output.append("")
-        output.append("---")
-        output.append("")
+    # Amendment document contains the actual changes
+    amend_doc = law_info.get('개정문', {})
+    if amend_doc:
+        amend_content = amend_doc.get('개정문내용', '')
+        if amend_content:
+            output.append("## 최근 개정 내용")
+            output.append(f"- **제개정구분**: {revision_type}")
+            output.append(f"- **시행일자**: {enforcement_date}")
+            output.append("")
+            output.append("### 개정문")
+            output.append("```")
+            # Clean and show the amendment content
+            clean_content = clean_html(amend_content)
+            output.append(clean_content[:2000])
+            if len(clean_content) > 2000:
+                output.append("...")
+            output.append("```")
+            output.append("")
     
-    if len(comp_items) > 15:
-        output.append(f"... 외 {len(comp_items) - 15}건의 조문 변경이 있습니다.")
+    # Provide web link for detailed comparison
+    output.append("## 📎 신구조문대비표 확인")
+    output.append("")
+    output.append("> **Note**: 상세한 신구조문대비표는 국가법령정보센터에서 확인할 수 있습니다.")
+    output.append("")
+    output.append(f"**[🔗 {law_name} 신구조문대비표 보기](https://www.law.go.kr/lsScLsComp.do?lsiSeq={law_id})**")
+    output.append("")
+    output.append("위 링크에서 조문별 변경 전/후 내용을 시각적으로 비교할 수 있습니다.")
     
     return "\n".join(output)
 
