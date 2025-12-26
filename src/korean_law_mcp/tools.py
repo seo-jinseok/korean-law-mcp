@@ -13,6 +13,8 @@ from .utils import (
     get_autonomous_law_detail_internal,
     get_legal_term_detail_internal,
     get_statutory_interpretation_detail_internal,
+    get_law_history_internal,
+    get_old_new_comparison_internal,
     resolve_references,
     _parse_articles
 )
@@ -361,3 +363,165 @@ def explore_legal_chain(query: str) -> str:
         output.append(delegations)
         
     return "\n".join(output)
+
+@mcp.tool()
+def get_external_links(resource_id: str) -> str:
+    """
+    Generate external links to the National Law Information Center (법령정보센터) website.
+    
+    Use this tool when the user wants to:
+    - View the original source on the official government website
+    - Share a direct link to a law or precedent
+    - Access additional features not available via this MCP (e.g., PDF downloads, official annotations)
+    
+    Args:
+        resource_id: A Typed ID (e.g., "statute:12345", "prec:98765", "admrul:54321")
+                     obtained from search results.
+    
+    Returns:
+        Markdown formatted links to the official website.
+    """
+    logger.info(f"Generating external links for: {resource_id}")
+    
+    if ":" not in resource_id:
+        return "Error: Invalid ID format. Expected 'type:id' (e.g., statute:12345)."
+    
+    r_type, r_id = resource_id.split(":", 1)
+    
+    # Base URLs for different resource types
+    BASE = "https://www.law.go.kr"
+    
+    links = []
+    
+    if r_type == "statute":
+        # 법령 상세페이지
+        links.append(f"**법령 상세**: [{BASE}/법령/{r_id}]({BASE}/법령/{r_id})")
+        # 법령 조문 페이지 (LST 파라미터)
+        links.append(f"**법령 본문**: [{BASE}/lsInfoP.do?lsiSeq={r_id}]({BASE}/lsInfoP.do?lsiSeq={r_id})")
+        # 연혁 페이지
+        links.append(f"**법령 연혁**: [{BASE}/lsHistoryP.do?lsiSeq={r_id}]({BASE}/lsHistoryP.do?lsiSeq={r_id})")
+        
+    elif r_type == "prec":
+        # 판례 상세페이지
+        links.append(f"**판례 상세**: [{BASE}/precInfoP.do?precSeq={r_id}]({BASE}/precInfoP.do?precSeq={r_id})")
+        
+    elif r_type == "admrul":
+        # 행정규칙 상세
+        links.append(f"**행정규칙 상세**: [{BASE}/admRulInfoP.do?admRulSeq={r_id}]({BASE}/admRulInfoP.do?admRulSeq={r_id})")
+        
+    elif r_type == "ordin":
+        # 자치법규 상세
+        links.append(f"**자치법규 상세**: [{BASE}/ordinInfoP.do?ordinSeq={r_id}]({BASE}/ordinInfoP.do?ordinSeq={r_id})")
+        
+    elif r_type == "const":
+        # 헌재결정례
+        links.append(f"**헌재결정례 상세**: [{BASE}/detcInfoP.do?detcSeq={r_id}]({BASE}/detcInfoP.do?detcSeq={r_id})")
+        
+    elif r_type == "interp":
+        # 법령해석례
+        links.append(f"**법령해석례 상세**: [{BASE}/expcInfoP.do?expcSeq={r_id}]({BASE}/expcInfoP.do?expcSeq={r_id})")
+        
+    elif r_type == "term":
+        # 법령용어
+        links.append(f"**법령용어 상세**: [{BASE}/lsTrmInfoP.do?lsTrmSeq={r_id}]({BASE}/lsTrmInfoP.do?lsTrmSeq={r_id})")
+        
+    else:
+        return f"Error: Unknown resource type '{r_type}'. Supported types: statute, prec, admrul, ordin, const, interp, term."
+    
+    output = [f"# External Links for {resource_id}", ""]
+    output.append("아래 링크를 클릭하면 국가법령정보센터 공식 웹사이트로 이동합니다.\n")
+    output.extend(links)
+    output.append("")
+    output.append("> **Note**: 링크가 작동하지 않을 경우, ID가 변경되었을 수 있습니다. [법령정보센터](https://www.law.go.kr)에서 직접 검색해 주세요.")
+    
+    return "\n".join(output)
+
+@mcp.tool()
+def get_article_history(law_name_or_id: str) -> str:
+    """
+    Get the revision history (연혁) of a law.
+    Shows when the law was enacted, amended, and what changes were made.
+    
+    Use this tool when the user wants to:
+    - Know when a law was last amended
+    - Track the evolution of a law over time
+    - Find historical versions of a law
+    
+    Args:
+        law_name_or_id: Law name (e.g., "고등교육법") or ID (e.g., "statute:12345" or just "12345")
+    
+    Returns:
+        Markdown formatted list of amendments with dates and summaries.
+    """
+    logger.info(f"Getting article history for: {law_name_or_id}")
+    
+    # Extract ID if typed format
+    law_id = law_name_or_id
+    if ":" in law_name_or_id:
+        law_id = law_name_or_id.split(":")[-1]
+    
+    # If it's a name (contains Korean), search for ID first
+    if re.search(r'[가-힣]', law_id):
+        try:
+            data = client.search_law(law_id)
+            if 'LawSearch' in data and 'law' in data['LawSearch']:
+                items = data['LawSearch']['law']
+                if not isinstance(items, list):
+                    items = [items]
+                # Get the first (best) match
+                law_id = items[0].get('법령일련번호', '')
+                law_name = items[0].get('법령명한글', '')
+                if not law_id:
+                    return f"Error: Could not find ID for '{law_name_or_id}'"
+            else:
+                return f"Error: Law not found: '{law_name_or_id}'"
+        except Exception as e:
+            return f"Error searching for law: {e}"
+    
+    return get_law_history_internal(law_id)
+
+@mcp.tool()
+def compare_old_new(law_name_or_id: str) -> str:
+    """
+    Get the old/new article comparison (신구조문대비) for a law.
+    Shows what changed in the most recent amendment, comparing old and new versions side by side.
+    
+    Use this tool when the user wants to:
+    - See what exactly changed in a recent amendment
+    - Compare before/after versions of specific articles
+    - Understand the scope of a legal revision
+    
+    Args:
+        law_name_or_id: Law name (e.g., "고등교육법") or ID (e.g., "statute:12345" or just "12345")
+    
+    Returns:
+        Markdown formatted comparison showing old and new text for each changed article.
+    """
+    logger.info(f"Getting old/new comparison for: {law_name_or_id}")
+    
+    # Extract ID if typed format
+    law_id = law_name_or_id
+    if ":" in law_name_or_id:
+        law_id = law_name_or_id.split(":")[-1]
+    
+    # If it's a name (contains Korean), search for ID first
+    if re.search(r'[가-힣]', law_id):
+        try:
+            data = client.search_law(law_id)
+            if 'LawSearch' in data and 'law' in data['LawSearch']:
+                items = data['LawSearch']['law']
+                if not isinstance(items, list):
+                    items = [items]
+                # Get the first (best) match
+                law_id = items[0].get('법령일련번호', '')
+                law_name = items[0].get('법령명한글', '')
+                if not law_id:
+                    return f"Error: Could not find ID for '{law_name_or_id}'"
+            else:
+                return f"Error: Law not found: '{law_name_or_id}'"
+        except Exception as e:
+            return f"Error searching for law: {e}"
+    
+    return get_old_new_comparison_internal(law_id)
+
+

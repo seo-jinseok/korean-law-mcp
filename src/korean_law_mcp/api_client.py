@@ -203,6 +203,44 @@ class KoreanLawClient:
         
         return xmltodict.parse(response.content)
 
+    def get_law_history(self, law_id: str) -> Dict[str, Any]:
+        """
+        Get revision history of a law.
+        Returns the list of amendments/revisions with dates and summary.
+        Endpoint: /DRF/lawService.do?target=lsHistory&MST={law_id}
+        """
+        url = f"{self.BASE_URL}/DRF/lawService.do"
+        params = {
+            "OC": self.user_id,
+            "target": "lsHistory",
+            "type": "XML",
+            "MST": law_id
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
+    def get_old_new_comparison(self, law_id: str) -> Dict[str, Any]:
+        """
+        Get old/new article comparison for a law (신구조문대비).
+        Returns the comparison table of changed articles.
+        Endpoint: /DRF/lawService.do?target=lsOnC&MST={law_id}
+        """
+        url = f"{self.BASE_URL}/DRF/lawService.do"
+        params = {
+            "OC": self.user_id,
+            "target": "lsOnC",
+            "type": "XML",
+            "MST": law_id
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        return xmltodict.parse(response.content)
+
 
 if __name__ == "__main__":
     # Test connection

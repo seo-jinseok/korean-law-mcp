@@ -397,6 +397,134 @@ def get_statutory_interpretation_detail_internal(interp_id: str) -> str:
     
     return "\n".join(output)
 
+def get_law_history_internal(law_id: str, article_no: str = None) -> str:
+    """
+    Get the revision history of a law.
+    Since the lsHistory API is not available, we extract revision info from the main law data.
+    """
+    logger.info(f"Getting law history for ID: {law_id}")
+    
+    try:
+        # Use the regular law detail API which contains revision info
+        data = client.get_law_detail(law_id)
+    except Exception as e:
+        logger.error(f"Error fetching law detail: {e}")
+        return f"Error: Failed to fetch law information. {e}"
+    
+    if '법령' not in data:
+        return "Error: Law not found."
+    
+    law_info = data['법령']
+    basic_info = law_info.get('기본정보', {})
+    
+    law_name = basic_info.get('법령명_한글', 'Unknown')
+    enforcement_date = basic_info.get('시행일자', '')
+    promulgation_date = basic_info.get('공포일자', '')
+    promulgation_no = basic_info.get('공포번호', '')
+    revision_type = basic_info.get('제개정구분', '')
+    
+    output = [f"# {law_name} 연혁 정보", ""]
+    
+    output.append("## 현행 법령 정보")
+    output.append(f"- **제개정구분**: {revision_type}")
+    output.append(f"- **시행일자**: {enforcement_date}")
+    output.append(f"- **공포일자**: {promulgation_date}")
+    output.append(f"- **공포번호**: {promulgation_no}")
+    output.append("")
+    
+    # 개정문 (Amendment document)
+    amend_doc = law_info.get('개정문', {})
+    if amend_doc:
+        amend_content = amend_doc.get('개정문내용', '')
+        if amend_content:
+            output.append("## 개정문")
+            output.append(clean_html(amend_content)[:500])
+            if len(amend_content) > 500:
+                output.append("...")
+            output.append("")
+    
+    # 제개정이유 (Reason for amendment)
+    reason_doc = law_info.get('제개정이유', {})
+    if reason_doc:
+        reason_content = reason_doc.get('제개정이유내용', '')
+        if reason_content:
+            output.append("## 제개정이유")
+            output.append(clean_html(reason_content)[:1000])
+            if len(reason_content) > 1000:
+                output.append("...")
+            output.append("")
+    
+    output.append("> **Note**: 전체 연혁 정보는 [법령정보센터](https://www.law.go.kr)에서 확인할 수 있습니다.")
+    
+    return "\n".join(output)
+
+def get_old_new_comparison_internal(law_id: str) -> str:
+    """
+    Get the old/new article comparison (신구조문대비) for a law.
+    Shows what changed in the most recent amendment.
+    """
+    logger.info(f"Getting old/new comparison for ID: {law_id}")
+    
+    try:
+        data = client.get_old_new_comparison(law_id)
+    except Exception as e:
+        logger.error(f"Error fetching old/new comparison: {e}")
+        return f"Error: Failed to fetch comparison. {e}"
+    
+    # Try to find comparison data in response
+    comp_items = []
+    
+    # Common response structures
+    if '신구법령' in data:
+        root = data['신구법령']
+        items = root.get('신구조문', []) or root.get('조문', [])
+        if not isinstance(items, list):
+            items = [items]
+        comp_items = items
+    elif 'LsOnCService' in data:
+        root = data['LsOnCService']
+        items = root.get('항목', []) or root.get('item', [])
+        if not isinstance(items, list):
+            items = [items]
+        comp_items = items
+    elif 'LsOnc' in data:
+        root = data['LsOnc']
+        items = root.get('조문', []) or root.get('item', [])
+        if not isinstance(items, list):
+            items = [items]
+        comp_items = items
+    
+    if not comp_items:
+        return f"No comparison data found. Response keys: {list(data.keys())}"
+    
+    output = ["# 신구조문대비 (Old/New Comparison)", ""]
+    output.append("최근 개정에서 변경된 조문을 보여줍니다.\n")
+    
+    for item in comp_items[:15]:  # Limit to 15 items
+        art_no = item.get('조문번호', '') or item.get('조번호', '') or item.get('articleNo', '')
+        old_text = item.get('현행내용', '') or item.get('구법내용', '') or item.get('oldText', '')
+        new_text = item.get('개정내용', '') or item.get('신법내용', '') or item.get('newText', '')
+        
+        output.append(f"## 제{art_no}조")
+        output.append("")
+        output.append("### 📜 현행 (Old)")
+        output.append(f"```")
+        output.append(clean_html(old_text) if old_text else "(신설)")
+        output.append(f"```")
+        output.append("")
+        output.append("### ✨ 개정 (New)")
+        output.append(f"```")
+        output.append(clean_html(new_text) if new_text else "(삭제)")
+        output.append(f"```")
+        output.append("")
+        output.append("---")
+        output.append("")
+    
+    if len(comp_items) > 15:
+        output.append(f"... 외 {len(comp_items) - 15}건의 조문 변경이 있습니다.")
+    
+    return "\n".join(output)
+
 def resolve_references(content: str, context_law_name: str = None, context_law_id: str = None) -> str:
     """
     Analyze legal text to resolve:
